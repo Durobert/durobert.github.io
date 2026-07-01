@@ -220,13 +220,10 @@ mjx-container[display="true"] + br {
   </div>
   <div class="post-card-excerpt">
     
-      <p>CUDA算子优化(1)：Reduce
-Reduce（规约）是GPU编程中最基础，也是最能体现并行思维的算子之一。本文将一步一步带你优化Reduce sum算子，让你理解怎么写出更快的kernel。
-1. Reduce算子基础
-Reduce是一类"多输入-&gt;单输出"的操作。比如下列操作：
+      <p>CUDA算子优化(1)：ReduceReduce（规约）是GPU编程中最基础，也是最能体现并行思维的算子之一。本文将一步一步带你优化Reduce sum算子，让你理解怎么写出更快的kernel。
+1. Reduce算子基础Reduce是一类”多输入-&gt;单输出”的操作。比如下列操作：
 
-Sum Reduce： （输入为长度N的数组，输出为所有元素的和）
-Max/Min Reduce：   ...</p>
+Sum Reduce：$\sum{i=0}^{N-1} x{i}$ （输入为长度N的数组，输出为所有元素的和...</p>
     
   </div>
   <a class="read-more" href="/2026/07/01/cuda%E4%BC%98%E5%8C%96/">Read More &rarr;</a>
