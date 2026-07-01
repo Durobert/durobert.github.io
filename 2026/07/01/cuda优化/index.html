@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
-  <title>cuda优化 | Hexo</title>
+  <title>cuda优化 | Durobert</title>
   <meta name="description" content="CUDA算子优化(1)：ReduceReduce（规约）是GPU编程中最基础，也是最能体现并行思维的算子之一。本文将一步一步带你优化Reduce sum算子，让你理解怎么写出更快的kernel。 1. Reduce算子基础Reduce是一类”多输入-&gt;单输出”的操作。比如下列操作：  Sum Reduce：$\sum{i&#x3D;0}^{N-1} x{i}$ （输入为长度N的数组，输出为所有元素的和">
 <meta property="og:type" content="article">
 <meta property="og:title" content="cuda优化">
 <meta property="og:url" content="http://example.com/2026/07/01/cuda%E4%BC%98%E5%8C%96/index.html">
-<meta property="og:site_name" content="Hexo">
+<meta property="og:site_name" content="Durobert">
 <meta property="og:description" content="CUDA算子优化(1)：ReduceReduce（规约）是GPU编程中最基础，也是最能体现并行思维的算子之一。本文将一步一步带你优化Reduce sum算子，让你理解怎么写出更快的kernel。 1. Reduce算子基础Reduce是一类”多输入-&gt;单输出”的操作。比如下列操作：  Sum Reduce：$\sum{i&#x3D;0}^{N-1} x{i}$ （输入为长度N的数组，输出为所有元素的和">
 <meta property="og:locale" content="en_US">
 <meta property="og:image" content="http://tuchuang.durobert.top/mweb/sum_reduce1.png">
@@ -20,7 +20,7 @@
 <meta property="og:image" content="http://tuchuang.durobert.top/mweb/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_2026-06-27_124138_056.png">
 <meta property="article:published_time" content="2026-06-30T16:10:04.000Z">
 <meta property="article:modified_time" content="2026-07-01T01:49:42.949Z">
-<meta property="article:author" content="John Doe">
+<meta property="article:author" content="Durobert">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://tuchuang.durobert.top/mweb/sum_reduce1.png">
   <link rel="icon" href="/images/logo.svg">
@@ -47,7 +47,7 @@
   <div class="site-wrapper">
     <header class="site-header">
   <div class="header-inner">
-    <a class="site-title" href="/"><img class="site-logo" src="/images/logo.svg" alt="Logo">Hexo</a>
+    <a class="site-title" href="/"><img class="site-logo" src="/images/logo.svg" alt="Logo">Durobert</a>
     <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
       <span class="nav-toggle-icon"></span>
     </button>
