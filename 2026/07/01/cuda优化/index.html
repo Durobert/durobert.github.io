@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
   <title>CUDA算子优化(1)：Reduce | Durobert</title>
-  <meta name="description" content="Reduce（规约）是GPU编程中最基础，也是最能体现并行思维的算子之一。本文将一步一步带你优化Reduce sum算子，让你理解怎么写出更快的kernel。 1. Reduce算子基础 Reduce是一类&quot;多输入-&gt;单输出&quot;的操作。比如下列操作：  Sum Reduce：                   #mjx-5e3033e{         display:c">
+  <meta name="description" content="Reduce（规约）是GPU编程中最基础，也是最能体现并行思维的算子之一。本文将一步一步带你优化Reduce sum算子，让你理解怎么写出更快的kernel。 1. Reduce算子基础 Reduce是一类&quot;多输入-&gt;单输出&quot;的操作。比如下列操作：  Sum Reduce：                   #mjx-74cebfa{         display:c">
 <meta property="og:type" content="article">
 <meta property="og:title" content="CUDA算子优化(1)：Reduce">
 <meta property="og:url" content="http://example.com/2026/07/01/cuda%E4%BC%98%E5%8C%96/index.html">
 <meta property="og:site_name" content="Durobert">
-<meta property="og:description" content="Reduce（规约）是GPU编程中最基础，也是最能体现并行思维的算子之一。本文将一步一步带你优化Reduce sum算子，让你理解怎么写出更快的kernel。 1. Reduce算子基础 Reduce是一类&quot;多输入-&gt;单输出&quot;的操作。比如下列操作：  Sum Reduce：                   #mjx-5e3033e{         display:c">
+<meta property="og:description" content="Reduce（规约）是GPU编程中最基础，也是最能体现并行思维的算子之一。本文将一步一步带你优化Reduce sum算子，让你理解怎么写出更快的kernel。 1. Reduce算子基础 Reduce是一类&quot;多输入-&gt;单输出&quot;的操作。比如下列操作：  Sum Reduce：                   #mjx-74cebfa{         display:c">
 <meta property="og:locale" content="en_US">
 <meta property="og:image" content="https://tuchuang.durobert.top/mweb/sum_reduce1.png">
 <meta property="og:image" content="https://tuchuang.durobert.top/mweb/sum_reduce2.png">
@@ -93,9 +93,9 @@
 <p>Reduce是一类&quot;多输入-&gt;单输出&quot;的操作。比如下列操作：</p>
 <ul>
 <li>Sum Reduce：
-    <span id="mjx-5e3033e">
+    <span id="mjx-74cebfa">
       <style>
-      #mjx-5e3033e{
+      #mjx-74cebfa{
         display:contents;
         mjx-assistive-mml {
           user-select: text !important;
@@ -255,9 +255,9 @@ g[data-mml-node="xypic"] path {
     </span>
    （输入为长度N的数组，输出为所有元素的和）</li>
 <li>Max/Min Reduce：
-    <span id="mjx-b2a8ed2">
+    <span id="mjx-993c6a9">
       <style>
-      #mjx-b2a8ed2{
+      #mjx-993c6a9{
         display:contents;
         mjx-assistive-mml {
           user-select: text !important;
@@ -417,9 +417,9 @@ g[data-mml-node="xypic"] path {
     </span>
      （输入是长度为N的数组，输出为数组的最大/最小值）</li>
 <li>Dot Product：
-    <span id="mjx-4c7bca9">
+    <span id="mjx-850cf0d">
       <style>
-      #mjx-4c7bca9{
+      #mjx-850cf0d{
         display:contents;
         mjx-assistive-mml {
           user-select: text !important;
@@ -581,9 +581,9 @@ g[data-mml-node="xypic"] path {
 </ul>
 <p>1.1 性能瓶颈分析<br>
 GPU Kernel的性能上限由<strong>计算量</strong>和<strong>访存量</strong>共同决定的。对于sum Reduce来说，每个元素读取一次（1次load）就做一次加法（1次FLOP），算术强度为
-    <span id="mjx-565419d">
+    <span id="mjx-2982eba">
       <style>
-      #mjx-565419d{
+      #mjx-2982eba{
         display:contents;
         mjx-assistive-mml {
           user-select: text !important;
@@ -857,8 +857,6 @@ Warp Divergence：GPU 最小的调度单位是Warp（32 个线程）。这 32 �
     
     <nav class="post-nav">
       
-      
-        <a class="next" href="/2026/07/01/hello-world/">Hello World &raquo;</a>
       
     </nav>
   </footer>
