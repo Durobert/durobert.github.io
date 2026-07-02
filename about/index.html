@@ -23,6 +23,10 @@
   
   
   
+    
+<link rel="stylesheet" href="/css/math.css">
+
+  
   
 <link rel="stylesheet" href="/css/style.css">
 
@@ -79,6 +83,29 @@
     <p>这是关于我的一份简介。</p>
 
   </div>
+
+  
+    
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true
+    },
+    options: {
+      // Skip the TOC sidebar and nav so heading math copied into the TOC
+      // isn't typeset a second time.
+      ignoreHtmlClass: 'toc-sidebar|site-nav',
+      enableMenu: false
+    }
+  };
+</script>
+
+<script defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4.1.2/tex-mml-chtml.js"
+        integrity="sha384-Nfw2UPOp2WaWfAjGXccSL8qKx4KWXN9NUonXtPcotBXKSqHMyNWrahYzDzIXhpTy"
+        crossorigin="anonymous"></script>
 
   
 </article>
