@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>认识大模型推理 | Durobert</title>
+  <meta name="description" content="LLM推理在做什么 训练是更新参数；推理是在固定参数下，根据输入token序列计算下一个token的分布，再采样，循环直至结束。推理不关心梯度，关心延迟、吞吐、显存占用。 对Decoder-only Transformer（如GPT、Qwen、LLaMA）：   输入：一段prompt（可视为token序列(x_1, … , x_T)）。   输出：在prompt之后逐个生成token，直到EOS">
+<meta property="og:type" content="article">
+<meta property="og:title" content="认识大模型推理">
+<meta property="og:url" content="http://example.com/2026/07/05/%E8%AE%A4%E8%AF%86%E5%A4%A7%E6%A8%A1%E5%9E%8B%E6%8E%A8%E7%90%86/index.html">
+<meta property="og:site_name" content="Durobert">
+<meta property="og:description" content="LLM推理在做什么 训练是更新参数；推理是在固定参数下，根据输入token序列计算下一个token的分布，再采样，循环直至结束。推理不关心梯度，关心延迟、吞吐、显存占用。 对Decoder-only Transformer（如GPT、Qwen、LLaMA）：   输入：一段prompt（可视为token序列(x_1, … , x_T)）。   输出：在prompt之后逐个生成token，直到EOS">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-07-05T09:29:10.000Z">
+<meta property="article:modified_time" content="2026-07-05T09:32:02.785Z">
+<meta property="article:author" content="Durobert">
+<meta property="article:tag" content="LLM">
+<meta name="twitter:card" content="summary">
+  <link rel="icon" href="/images/logo.svg">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-regular/result.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-medium/result.css">
+
+  
+  
+  
+    
+<link rel="stylesheet" href="/css/math.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('warmpaper-theme');
+        if (saved === 'dark' || saved === 'light') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (e) {}
+    })();
+  </script>
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+<body>
+  <div class="site-wrapper">
+    <header class="site-header">
+  <div class="header-inner">
+    <a class="site-title" href="/"><img class="site-logo" src="/images/logo.svg" alt="Logo">Durobert</a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+      <span class="nav-toggle-icon"></span>
+    </button>
+    <nav class="site-nav">
+      
+        <a class="nav-link" href="/">Home</a>
+      
+        <a class="nav-link" href="/archives">Archives</a>
+      
+        <a class="nav-link" href="/tags">Tags</a>
+      
+        <a class="nav-link" href="/categories">Categories</a>
+      
+        <a class="nav-link" href="/about">About</a>
+      
+      <button class="theme-toggle" type="button" aria-label="切换主题" title="切换主题" data-theme-state="light">
+        <svg class="icon-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg class="icon-moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+    <main class="main-content">
+      <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">认识大模型推理</h1>
+    <div class="post-meta">
+      <time datetime="2026-07-05T09:29:10.000Z">2026-07-05</time>
+      
+        <span class="separator">&middot;</span>
+        
+          <a href="/categories/LLM/">LLM</a>
+        
+      
+    </div>
+  </header>
+
+  <div class="post-body-wrapper">
+    <div class="post-content">
+      <h2 id="LLM推理在做什么">LLM推理在做什么</h2>
+<p><strong>训练</strong>是更新参数；<strong>推理</strong>是在固定参数下，根据输入token序列计算下一个token的分布，再采样，循环直至结束。推理不关心梯度，关心<strong>延迟、吞吐、显存占用</strong>。</p>
+<p>对Decoder-only Transformer（如GPT、Qwen、LLaMA）：</p>
+<ul>
+<li>
+<p>输入：一段<strong>prompt</strong>（可视为token序列(x_1, … , x_T)）。</p>
+</li>
+<li>
+<p>输出：在prompt之后<strong>逐个生成</strong>token，直到EOS或达到最大长度。</p>
+</li>
+</ul>
+<h2 id="Prefill阶段（填充阶段）">Prefill阶段（填充阶段）</h2>
+<p><strong>定义</strong>：第一次（或某一扩写轮次）对<strong>整个prompt</strong>（后一批新token）做前向，计算每层的<strong>Q、K、V</strong>，并写出<strong>KV Cache</strong>供后续步复用。（用户输入完prompt到生成首个token的过程）</p>
+<p><strong>特点</strong>：</p>
+<ul>
+<li>
+<p><strong>计算密集（Compute-bound）</strong>：矩阵乘维度大，GPU容易饱和算力</p>
+</li>
+<li>
+<p><strong>可并行度高</strong>：prompt内token之间在因果掩码下仍可做高效注意力。</p>
+</li>
+</ul>
+<blockquote>
+<p>思考：为什么说矩阵乘维度大，是计算密集型，GPU容易饱和算力</p>
+</blockquote>
+<h2 id="Decode阶段（解码阶段）">Decode阶段（解码阶段）</h2>
+<p><strong>定义</strong>：从<strong>已生成的最后一个位置</strong>开始，每步只输入<strong>1个新token</strong>（或每序列一步），读取<strong>历史KVCache</strong>，计算当前步注意力，再采样下一个token。（生成首个token到推理停止的过程）</p>
+<p><strong>特点</strong>：</p>
+<ul>
+<li>
+<p><strong>内存/带宽密集（Memory-bound）</strong>：每步算子相对小，瓶颈常在<strong>读KV</strong>、写KV、以及内核启动。</p>
+</li>
+<li>
+<p><strong>步数多</strong>：生成长度为（N）时，decode要跑约（N）步。</p>
+</li>
+</ul>
+<blockquote>
+<p>思考：为什么说Decode阶段是内存/带宽密集型的</p>
+</blockquote>
+<p><strong>问题</strong></p>
+<ol>
+<li>推理和训练反向传播的主要区别？</li>
+<li>为什么说Decode阶段是memory-bound？</li>
+<li>首token延迟主要受什么影响？</li>
+<li>自回归能不能并行生成多个token？</li>
+<li>Batch size在Prefill与Decode中含义有何不同？</li>
+<li>显存主要被谁吃掉了？</li>
+</ol>
+
+    </div>
+
+    
+        <aside class="toc-sidebar">
+  <div class="toc-wrapper">
+    <h3 class="toc-title">Contents</h3>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#LLM%E6%8E%A8%E7%90%86%E5%9C%A8%E5%81%9A%E4%BB%80%E4%B9%88"><span class="toc-text">LLM推理在做什么</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Prefill%E9%98%B6%E6%AE%B5%EF%BC%88%E5%A1%AB%E5%85%85%E9%98%B6%E6%AE%B5%EF%BC%89"><span class="toc-text">Prefill阶段（填充阶段）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Decode%E9%98%B6%E6%AE%B5%EF%BC%88%E8%A7%A3%E7%A0%81%E9%98%B6%E6%AE%B5%EF%BC%89"><span class="toc-text">Decode阶段（解码阶段）</span></a></li></ol>
+  </div>
+</aside>
+
+      
+  </div>
+
+  
+
+  
+
+  <footer class="post-footer">
+    
+      <div class="post-tags">
+        
+          <a href="/tags/LLM/">#LLM</a>
+        
+      </div>
+    
+    <nav class="post-nav">
+      
+      
+        <a class="next" href="/2026/07/02/CUDA%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96-2-%EF%BC%9ARMSNorm/">CUDA算子优化(2)：RMSNorm &raquo;</a>
+      
+    </nav>
+  </footer>
+
+  
+    
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true
+    },
+    options: {
+      // Skip the TOC sidebar and nav so heading math copied into the TOC
+      // isn't typeset a second time.
+      ignoreHtmlClass: 'toc-sidebar|site-nav',
+      enableMenu: false
+    }
+  };
+</script>
+
+<script defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4.1.2/tex-mml-chtml.js"
+        integrity="sha384-Nfw2UPOp2WaWfAjGXccSL8qKx4KWXN9NUonXtPcotBXKSqHMyNWrahYzDzIXhpTy"
+        crossorigin="anonymous"></script>
+
+  
+</article>
+
+    </main>
+    <footer class="site-footer">
+  <div class="footer-inner">
+    
+      <p>鄂ICP备2023018829号</p>
+    
+    <p>Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &middot; Theme <a href="https://github.com/finch-xu/hexo-theme-warmpaper" target="_blank" rel="noopener">Warmpaper</a></p>
+  </div>
+</footer>
+
+  </div>
+  
+<script src="/js/main.js"></script>
+
+</body>
+</html>
