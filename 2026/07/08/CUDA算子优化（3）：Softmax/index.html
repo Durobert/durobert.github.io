@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>CUDA算子优化（3）：Softmax | Durobert</title>
+  <meta name="description" content="Softmax是Transformer中Attention计算的核心组件，本文从朴素实现暴露的数值问题出发，逐步引入Safe Softmax、Online Softmax等手段，一步一步优化Softmax Kernel的性能。 Softmax的定义 Softmax函数也称为归一化指数函数，它能将一个含任意实数的N维向量z压缩到另一个N维实向量$\sigma(z)$中，使得每个元素的范围都在(0,">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CUDA算子优化（3）：Softmax">
+<meta property="og:url" content="http://example.com/2026/07/08/CUDA%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96%EF%BC%883%EF%BC%89%EF%BC%9ASoftmax/index.html">
+<meta property="og:site_name" content="Durobert">
+<meta property="og:description" content="Softmax是Transformer中Attention计算的核心组件，本文从朴素实现暴露的数值问题出发，逐步引入Safe Softmax、Online Softmax等手段，一步一步优化Softmax Kernel的性能。 Softmax的定义 Softmax函数也称为归一化指数函数，它能将一个含任意实数的N维向量z压缩到另一个N维实向量$\sigma(z)$中，使得每个元素的范围都在(0,">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-07-08T10:05:39.000Z">
+<meta property="article:modified_time" content="2026-07-08T10:07:28.649Z">
+<meta property="article:author" content="Durobert">
+<meta property="article:tag" content="CUDA">
+<meta property="article:tag" content="Softmax算子">
+<meta name="twitter:card" content="summary">
+  <link rel="icon" href="/images/logo.svg">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-regular/result.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-medium/result.css">
+
+  
+  
+  
+    
+<link rel="stylesheet" href="/css/math.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('warmpaper-theme');
+        if (saved === 'dark' || saved === 'light') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (e) {}
+    })();
+  </script>
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+<body>
+  <div class="site-wrapper">
+    <header class="site-header">
+  <div class="header-inner">
+    <a class="site-title" href="/"><img class="site-logo" src="/images/logo.svg" alt="Logo">Durobert</a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+      <span class="nav-toggle-icon"></span>
+    </button>
+    <nav class="site-nav">
+      
+        <a class="nav-link" href="/">Home</a>
+      
+        <a class="nav-link" href="/archives">Archives</a>
+      
+        <a class="nav-link" href="/tags">Tags</a>
+      
+        <a class="nav-link" href="/categories">Categories</a>
+      
+        <a class="nav-link" href="/about">About</a>
+      
+      <button class="theme-toggle" type="button" aria-label="切换主题" title="切换主题" data-theme-state="light">
+        <svg class="icon-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg class="icon-moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+    <main class="main-content">
+      <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">CUDA算子优化（3）：Softmax</h1>
+    <div class="post-meta">
+      <time datetime="2026-07-08T10:05:39.000Z">2026-07-08</time>
+      
+        <span class="separator">&middot;</span>
+        
+          <a href="/categories/CUDA/">CUDA</a>
+        
+      
+    </div>
+  </header>
+
+  <div class="post-body-wrapper">
+    <div class="post-content">
+      <p>Softmax是Transformer中Attention计算的核心组件，本文从朴素实现暴露的数值问题出发，逐步引入Safe Softmax、Online Softmax等手段，一步一步优化Softmax Kernel的性能。</p>
+<h2 id="Softmax的定义">Softmax的定义</h2>
+<p>Softmax函数也称为归一化指数函数，它能将一个含任意实数的N维向量z压缩到另一个N维实向量$\sigma(z)$中，使得<strong>每个元素的范围都在(0, 1)之间，并且所有元素的和为1</strong>。该函数定义按下面式子给出：</p>
+<p>$$\large \text{Softmax}(x_i) = \frac{e^{x_i}}{\sum_{j=1}^{N} e^{x_j}}$$</p>
+<p>其中，$x_i$为第i个节点输出的值，N为输出节点的个数。</p>
+<p>Softmax的公式涉及到指数运算$e^{x_{i}}$，存在数值下溢问题，当$x_i$很小时，分母趋近于0，导致NAN。那么怎么解决呢？</p>
+<p><strong>解决方案：减最大值技巧</strong></p>
+<p>数学上可以证明，对输入向量的每个元素减去同一个常数c，不改变Softmax的输出：</p>
+<p>$$\large \text{Softmax}(x_i) = \frac{e^{x_i}}{\sum_{j=1}^{N} e^{x_j}} = \frac{e^{x_i - c}}{\sum_{j=1}^{N} e^{x_j - c}}$$</p>
+<p>当c=max(x)时，即c为$x_i$的最大值，所有指数的参数都&lt;=0，结果会落在(0, 1]之间，这就是Safe Softmax。</p>
+<h2 id="Softmax的cpu实现">Softmax的cpu实现</h2>
+<p>Safe Softmax的实现可以分为三个阶段：</p>
+<ol>
+<li>求向量的最大值c</li>
+<li>求和$\sum_{j=1}^{N} e^{x_j - c}$</li>
+<li>归一化$\frac{e^{x_i - c}}{\sum_{j=1}^{N} e^{x_j - c}}$</li>
+</ol>
+<p>具体代码实现如下：(B为Batch size，T为序列长度，C为通道数)</p>
+<figure class="highlight c"><table><tr><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> <span class="hljs-title function_">softmax_cpu</span><span class="hljs-params">(<span class="hljs-type">float</span> *h_out, <span class="hljs-type">float</span> *h_data, <span class="hljs-type">int</span> B, <span class="hljs-type">int</span> T, <span class="hljs-type">int</span> C)</span> &#123;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; B * T; ++i) &#123;<br>        <span class="hljs-type">float</span> *inp = h_data + i * C;<br>        <span class="hljs-type">float</span> *out = h_out + i * C;<br><br>        <span class="hljs-type">float</span> maxval = -INFINITY;<br>        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> j = <span class="hljs-number">0</span>; j &lt; C; ++j) &#123;<br>            <span class="hljs-keyword">if</span> (inp[j] &gt; maxval) &#123;<br>                maxval = inp[j];<br>            &#125;<br>        &#125;<br><br>        <span class="hljs-type">float</span> sum = <span class="hljs-number">0.0f</span>;<br>        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> j = <span class="hljs-number">0</span>; j &lt; C; ++j) &#123;<br>            sum += expf(inp[j] - maxval);<br>        &#125;<br>        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> j = <span class="hljs-number">0</span>; j &lt; C; ++j) &#123;<br>            out[j] = expf(inp[j] - maxval) / sum;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="版本V0一个线程处理一行">版本V0一个线程处理一行</h2>
+<p>假设B表示Batch size，T表示序列长度，C表示通道数，我们要处理的维度是在C这个维度，如果是一个线程处理一行，那么我们总共需要B*T个线程，也就是说block_size为BLOCK_SIZE时，grid_size为（B * T + BLOCK_SIZE - 1） / BLOCK_SIZE。</p>
+<figure class="highlight c"><table><tr><td class="code"><pre><code class="hljs c">__global__ <span class="hljs-type">void</span> <span class="hljs-title function_">softmax_gpu</span><span class="hljs-params">(<span class="hljs-type">float</span> *d_out, <span class="hljs-type">float</span> *d_data, <span class="hljs-type">int</span> N, <span class="hljs-type">int</span> C)</span> &#123;<br>    <span class="hljs-type">int</span> tid = threadIdx.x + blockDim.x * blockIdx.x;<br>    <span class="hljs-type">int</span> row = tid;<br>    <span class="hljs-keyword">if</span> (row &gt; N) &#123;<br>        <span class="hljs-keyword">return</span>;<br>    &#125;<br><br>    <span class="hljs-type">float</span> *inp = d_data + row * C;<br>    <span class="hljs-type">float</span> *out = d_out + row * C;<br><br>    <span class="hljs-type">float</span> maxval = -INFINITY;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; C; ++i) &#123;<br>        <span class="hljs-keyword">if</span> (inp[i] &gt; maxval) &#123;<br>            maxval = inp[i];<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-type">float</span> sum = <span class="hljs-number">0.0f</span>;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; C; ++i) &#123;<br>        sum += expf(inp[i] - maxval);<br>    &#125;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; C; ++i) &#123;<br>        out[i] = expf(inp[i] - maxval) / sum;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>这种方法有一个问题在于，总共要遍历三遍向量，有没有办法只遍历两遍向量呢？即在求和的同时更新最大值。对于Memory-bound的操作来说，减少一段扫描，相当于提升性能33%。这就引出了下面的方法Online Softmax。</p>
+<h2 id="版本V1-Online-Softmax">版本V1 Online Softmax</h2>
+<p>假设我们已经处理了前j个数据，得到了</p>
+<ul>
+<li>
+<p>当前最大值$m_j$（就是前j个数里最大的那个）</p>
+</li>
+<li>
+<p>当前分母$d_j = \sum_{i=1}^{j} e^{x_i - m_j}$</p>
+</li>
+</ul>
+<p>现在，第j+1个数据$x_{j+1}$来了，我们需要更新$m_j$和$d_j$</p>
+<p><strong>步骤1：更新最大值</strong></p>
+<p>新来的$x_{j+1}$可能比之前的最大值$m_j$大，也可能小。所以，新的最大值为：</p>
+<p>$$m_{j+1} = max(m_j, x_{j+1})$$</p>
+<p>这很好理解，新的最大值要么是老的最大值，要么是新来的值，挑大的那个就行。</p>
+<p><strong>步骤2：更新分母</strong></p>
+<p>我们需要重新计算新的分母$d_{j+1}$，它应该是：</p>
+<p>$$d_{j+1} = \sum_{i = 1}^{j+1}{e^{x_i - m_{j+1}}} = \sum_{i = 1}^{j}{(e^{x_i - m_{j}}*e^{m_j - m_{j+1}})} + e^{x_{j+1}-m_{j+1}} = d_j * e^{m_j - m_{j+1}} + e^{x_{j+1}-m_{j+1}}$$</p>
+<p>代码如下：</p>
+<figure class="highlight c"><table><tr><td class="code"><pre><code class="hljs c">__global__ <span class="hljs-type">void</span> <span class="hljs-title function_">online_softmax</span><span class="hljs-params">(<span class="hljs-type">float</span> *d_out, <span class="hljs-type">float</span> *d_data, <span class="hljs-type">int</span> N, <span class="hljs-type">int</span> C)</span> &#123;<br>    <span class="hljs-type">int</span> tid = threadIdx.x + blockDim.x * blockIdx.x;<br>    <span class="hljs-type">int</span> row = tid;<br>    <span class="hljs-keyword">if</span> (row &gt; N) &#123;<br>        <span class="hljs-keyword">return</span>;<br>    &#125;<br>    <span class="hljs-type">float</span> *inp = d_data + row * C;<br>    <span class="hljs-type">float</span> *out = d_out + row * C;<br><br>    <span class="hljs-type">float</span> sum = <span class="hljs-number">0.0f</span>;<br>    <span class="hljs-type">float</span> maxval = -INFINITY;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; C; ++i) &#123;<br>        <span class="hljs-type">float</span> val = inp[i];<br>        <span class="hljs-keyword">if</span> (inp[i] &gt; maxval) &#123;<br>            sum *= expf(maxval - val);<br>            maxval = val;<br>        &#125;<br>        sum += expf(val - maxval);<br>    &#125;<br><br>    <span class="hljs-type">float</span> r = <span class="hljs-number">1</span> / sum;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; C; ++i) &#123;<br>        out[i] = expf(inp[i] - maxval) * r;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="版本V2-一个Warp处理一行">版本V2 一个Warp处理一行</h2>
+<figure class="highlight c"><table><tr><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">define</span> BLOCK_SIZE 32</span><br><br>__global__ <span class="hljs-type">void</span> <span class="hljs-title function_">softmax_gpu</span><span class="hljs-params">(<span class="hljs-type">float</span> *d_out, <span class="hljs-type">float</span> *d_data, <span class="hljs-type">int</span> N, <span class="hljs-type">int</span> C)</span> &#123;<br>    <span class="hljs-type">int</span> tid = threadIdx.x + blockDim.x * blockIdx.x;<br>    <span class="hljs-type">int</span> row_id = tid / blockDim.x;<br>    <span class="hljs-type">int</span> lane_id = tid % blockDim.x;<br>    <span class="hljs-keyword">if</span> (row_id &gt; N) &#123;<br>        <span class="hljs-keyword">return</span>;<br>    &#125;<br><br>    <span class="hljs-type">float</span> *inp = d_data + row_id * C;<br>    <span class="hljs-type">float</span> *out = d_out + row_id * C;<br><br>    <span class="hljs-type">float</span> maxval = -INFINITY;<br>    <span class="hljs-type">float</span> sum = <span class="hljs-number">0.0f</span>;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = lane_id; i &lt; C; i += BLOCK_SIZE) &#123;<br>        <span class="hljs-type">float</span> val = inp[i];<br>        <span class="hljs-keyword">if</span> (val &gt; maxval) &#123;<br>            sum *= expf(maxval - val);<br>            maxval = val;<br>        &#125;<br>        sum += expf(val - maxval);<br>    &#125;<br><br>    <span class="hljs-type">unsigned</span> mask = <span class="hljs-number">0xFFFFFFFF</span>;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> offset = BLOCK_SIZE / <span class="hljs-number">2</span>; offset &gt; <span class="hljs-number">0</span>; offset /= <span class="hljs-number">2</span>) &#123;<br>        <span class="hljs-type">float</span> sum_other = __shfl_down_sync(mask, sum, offset);<br>        <span class="hljs-type">float</span> maxval_other = __shfl_down_sync(mask, maxval, offset);<br>        <span class="hljs-type">float</span> maxval_new = fmaxf(maxval, maxval_other);<br>        sum = sum * expf(maxval - maxval_new) + sum_other * expf(maxval_other - maxval_new);<br>        maxval = maxval_new;<br>    &#125;<br>    sum = __shfl_sync(mask, sum, <span class="hljs-number">0</span>);<br>    maxval = __shfl_sync(mask, maxval, <span class="hljs-number">0</span>);<br><br>    <span class="hljs-type">float</span> r = <span class="hljs-number">1</span> / sum;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = lane_id; i &lt; C; i+=BLOCK_SIZE) &#123;<br>        out[i] = expf(inp[i] - maxval) * r;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+    </div>
+
+    
+        <aside class="toc-sidebar">
+  <div class="toc-wrapper">
+    <h3 class="toc-title">Contents</h3>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Softmax%E7%9A%84%E5%AE%9A%E4%B9%89"><span class="toc-text">Softmax的定义</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Softmax%E7%9A%84cpu%E5%AE%9E%E7%8E%B0"><span class="toc-text">Softmax的cpu实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%ACV0%E4%B8%80%E4%B8%AA%E7%BA%BF%E7%A8%8B%E5%A4%84%E7%90%86%E4%B8%80%E8%A1%8C"><span class="toc-text">版本V0一个线程处理一行</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%ACV1-Online-Softmax"><span class="toc-text">版本V1 Online Softmax</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%ACV2-%E4%B8%80%E4%B8%AAWarp%E5%A4%84%E7%90%86%E4%B8%80%E8%A1%8C"><span class="toc-text">版本V2 一个Warp处理一行</span></a></li></ol>
+  </div>
+</aside>
+
+      
+  </div>
+
+  
+
+  
+
+  <footer class="post-footer">
+    
+      <div class="post-tags">
+        
+          <a href="/tags/CUDA/">#CUDA</a>
+        
+          <a href="/tags/Softmax%E7%AE%97%E5%AD%90/">#Softmax算子</a>
+        
+      </div>
+    
+    <nav class="post-nav">
+      
+      
+        <a class="next" href="/2026/07/05/%E8%AE%A4%E8%AF%86%E5%A4%A7%E6%A8%A1%E5%9E%8B%E6%8E%A8%E7%90%86/">认识大模型推理 &raquo;</a>
+      
+    </nav>
+  </footer>
+
+  
+    
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true
+    },
+    options: {
+      // Skip the TOC sidebar and nav so heading math copied into the TOC
+      // isn't typeset a second time.
+      ignoreHtmlClass: 'toc-sidebar|site-nav',
+      enableMenu: false
+    }
+  };
+</script>
+
+<script defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4.1.2/tex-mml-chtml.js"
+        integrity="sha384-Nfw2UPOp2WaWfAjGXccSL8qKx4KWXN9NUonXtPcotBXKSqHMyNWrahYzDzIXhpTy"
+        crossorigin="anonymous"></script>
+
+  
+</article>
+
+    </main>
+    <footer class="site-footer">
+  <div class="footer-inner">
+    
+      <p>鄂ICP备2023018829号</p>
+    
+    <p>Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &middot; Theme <a href="https://github.com/finch-xu/hexo-theme-warmpaper" target="_blank" rel="noopener">Warmpaper</a></p>
+  </div>
+</footer>
+
+  </div>
+  
+<script src="/js/main.js"></script>
+
+</body>
+</html>
