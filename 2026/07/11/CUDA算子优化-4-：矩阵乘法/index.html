@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>CUDA算子优化(4)：矩阵乘法 | Durobert</title>
+  <meta name="description" content="矩阵乘法的数学定义 矩阵乘法是线性代数中的核心运算。给定两个矩阵：   矩阵A：维度为$M \times K$   矩阵B：维度为$ K \times N $   它们的乘积矩阵$ C &#x3D; A \times B $的维度为$ M \times N $。其中，C中的第i行第j列的元素$ C[i][j] $由以下公式计算： $$C[i][j] &#x3D; \sum_{k &#x3D; 0}^{K - 1}{A[i][k">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CUDA算子优化(4)：矩阵乘法">
+<meta property="og:url" content="http://example.com/2026/07/11/CUDA%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96-4-%EF%BC%9A%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95/index.html">
+<meta property="og:site_name" content="Durobert">
+<meta property="og:description" content="矩阵乘法的数学定义 矩阵乘法是线性代数中的核心运算。给定两个矩阵：   矩阵A：维度为$M \times K$   矩阵B：维度为$ K \times N $   它们的乘积矩阵$ C &#x3D; A \times B $的维度为$ M \times N $。其中，C中的第i行第j列的元素$ C[i][j] $由以下公式计算： $$C[i][j] &#x3D; \sum_{k &#x3D; 0}^{K - 1}{A[i][k">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1783757877019.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1783776977237.png">
+<meta property="article:published_time" content="2026-07-11T14:24:37.000Z">
+<meta property="article:modified_time" content="2026-07-11T14:25:58.760Z">
+<meta property="article:author" content="Durobert">
+<meta property="article:tag" content="CUDA">
+<meta property="article:tag" content="矩阵乘法">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1783757877019.png">
+  <link rel="icon" href="/images/logo.svg">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-regular/result.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-medium/result.css">
+
+  
+  
+  
+    
+<link rel="stylesheet" href="/css/math.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('warmpaper-theme');
+        if (saved === 'dark' || saved === 'light') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (e) {}
+    })();
+  </script>
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+<body>
+  <div class="site-wrapper">
+    <header class="site-header">
+  <div class="header-inner">
+    <a class="site-title" href="/"><img class="site-logo" src="/images/logo.svg" alt="Logo">Durobert</a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+      <span class="nav-toggle-icon"></span>
+    </button>
+    <nav class="site-nav">
+      
+        <a class="nav-link" href="/">Home</a>
+      
+        <a class="nav-link" href="/archives">Archives</a>
+      
+        <a class="nav-link" href="/tags">Tags</a>
+      
+        <a class="nav-link" href="/categories">Categories</a>
+      
+        <a class="nav-link" href="/about">About</a>
+      
+      <button class="theme-toggle" type="button" aria-label="切换主题" title="切换主题" data-theme-state="light">
+        <svg class="icon-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg class="icon-moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+    <main class="main-content">
+      <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">CUDA算子优化(4)：矩阵乘法</h1>
+    <div class="post-meta">
+      <time datetime="2026-07-11T14:24:37.000Z">2026-07-11</time>
+      
+        <span class="separator">&middot;</span>
+        
+          <a href="/categories/CUDA/">CUDA</a>
+        
+      
+    </div>
+  </header>
+
+  <div class="post-body-wrapper">
+    <div class="post-content">
+      <h2 id="矩阵乘法的数学定义">矩阵乘法的数学定义</h2>
+<p>矩阵乘法是线性代数中的核心运算。给定两个矩阵：</p>
+<ul>
+<li>
+<p>矩阵A：维度为$M \times K$</p>
+</li>
+<li>
+<p>矩阵B：维度为$ K \times N $</p>
+</li>
+</ul>
+<p>它们的乘积矩阵$ C = A \times B $的维度为$ M \times N $。其中，C中的第i行第j列的元素$ C[i][j] $由以下公式计算：</p>
+<p>$$C[i][j] = \sum_{k = 0}^{K - 1}{A[i][k] * B[k][j]}$$</p>
+<p>即，C的每一个元素是A的一行与B的一列对应元素乘积之和</p>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1783757877019.png" alt="CUDA矩阵乘法2"></p>
+<p><strong>计算强度</strong>：</p>
+<p>计算强度是衡量<strong>计算任务中浮点运算量与内存访问量比率</strong>的核心指标，单位为<strong>FLOPs/byte</strong>（每字节浮点运算次数），其计算公式为：</p>
+<p>$$I = \frac{总浮点运算次数(FLOPs)}{从主存(DRAM)读取/写入的总字节数}$$</p>
+<p>对于上述矩阵乘法来说，每个C[i][j]需要K次乘法+(K- 1)次加法，约等于2K FLOPs，总的FLOPs=M x N x 2K = 2MNK；对于主存访问量，读取A，需要M x K x 4字节；读取B，需要K x N x 4字节；写入C，需要M x N x 4字节，总字节数=4(MK + KN + MN)</p>
+<p>所以计算强度为$I = \frac{2MNK}{4(MK + KN + MN)} = \frac{MNK}{2(MK + KN + MN)}$</p>
+<p>当M=K=N时，I = N / 6（FLOPs/byte），矩阵乘法的计算强度与矩阵大小N成正比。</p>
+<h2 id="版本V0矩阵乘法cpu实现">版本V0矩阵乘法cpu实现</h2>
+<figure class="highlight c"><table><tr><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> <span class="hljs-title function_">multi_cpu</span><span class="hljs-params">(<span class="hljs-type">float</span> *C, <span class="hljs-type">float</span> *A, <span class="hljs-type">float</span> *B, <span class="hljs-type">int</span> M, <span class="hljs-type">int</span> K, <span class="hljs-type">int</span> N)</span> &#123;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; M; ++i) &#123;<br>        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> j = <span class="hljs-number">0</span>; j &lt; N; ++j) &#123;<br>            <span class="hljs-type">float</span> sum = <span class="hljs-number">0.0f</span>;<br>            <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> k = <span class="hljs-number">0</span>; k &lt; K; ++k) &#123;<br>                sum += A[k + i * K] * B[j + k * N];<br>            &#125;<br>            C[j + i * N] = sum;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>当M=N=K时，时间复杂度为$O(MNK)=O(N^3)$，空间复杂度为$O(MK+KN+MN)=O(N^2)$。</p>
+<h2 id="版本V1朴素矩阵乘法">版本V1朴素矩阵乘法</h2>
+<h3 id="实现原理：全局内存访问">实现原理：全局内存访问</h3>
+<p><strong>其核心思想</strong></p>
+<ol>
+<li><strong>任务并行分解</strong>：一个线程负责计算结果矩阵C的一个元素C[i][j]</li>
+<li><strong>全局内存访问</strong>：每个线程直接从全局内存中读取矩阵A的一整行和矩阵B的一整列数据</li>
+<li><strong>计算与累加</strong>：线程执行内积运算，将结果写回全局内存中的C矩阵。</li>
+</ol>
+<p><strong>核函数设计思路</strong></p>
+<ul>
+<li>
+<p><strong>线程网络与块结构</strong>：使用二维网格和二维线程块，自然地映射到二维结果矩阵C</p>
+</li>
+<li>
+<p><strong>索引计算</strong>：每个线程通过blockIdx、blockDim和threadIdx计算出自己负责的C矩阵元素坐标(i, j)</p>
+</li>
+<li>
+<p><strong>循环计算</strong>：线程通过一个循环，累加A[i][k] * B[k][j]的结果</p>
+</li>
+<li>
+<p><strong>边界检查</strong>：确保线程索引不会超出矩阵维度</p>
+</li>
+</ul>
+<p><strong>核函数启动配置</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><code class="hljs cuda">// 线程块大小：16x16 = 256 线程/block（GPU warp 友好的选择）<br>dim3 blockDim(32, 32);<br>// Grid 大小：覆盖整个 C 矩阵<br>dim3 gridDim((N + 32 - 1) / 32, (M + 32 - 1) / 32);<br><br>matmul_v1_naive&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;(d_C, d_A, d_B, M, K, N);<br></code></pre></td></tr></table></figure>
+<p>每个线程块包含 $32 \times 32 = 1024$ 个线程，正好是 32 个 warp（$1024/32=32$），对 GPU 调度友好。Grid 的 x 方向覆盖 C 矩阵的列数 N，y 方向覆盖行数 M，每个线程独立计算一个 $C[i][j]$。</p>
+<p><strong>CUDA Kernel 代码实现</strong></p>
+<figure class="highlight c"><table><tr><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;utils.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;stdio.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;stdlib.h&gt;</span></span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> WS 32</span><br><br><span class="hljs-comment">// 每个线程处理一个输出元素</span><br>__global__ <span class="hljs-type">void</span> <span class="hljs-title function_">sgemm_kernel1</span><span class="hljs-params">(<span class="hljs-type">float</span> *C, <span class="hljs-type">const</span> <span class="hljs-type">float</span> *A, <span class="hljs-type">const</span> <span class="hljs-type">float</span> *B, <span class="hljs-type">int</span> M, <span class="hljs-type">int</span> N, <span class="hljs-type">int</span> K)</span> &#123;<br>  <span class="hljs-type">int</span> col = threadIdx.x + blockDim.x * blockIdx.x;<br>  <span class="hljs-type">int</span> row = threadIdx.y + blockDim.y * blockIdx.y;<br>  <span class="hljs-keyword">if</span> (row &gt;= M || col &gt;= N)<br>    <span class="hljs-keyword">return</span>;<br><br>  <span class="hljs-type">float</span> val = <span class="hljs-number">0.0f</span>;<br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> k = <span class="hljs-number">0</span>; k &lt; K; ++k) &#123;<br>    <span class="hljs-comment">// C[row][col] += A[row][k] * B[k][col]</span><br>    val += A[k + row * K] * B[col + k * N];<br>  &#125;<br>  C[col + row * N] = val;<br>&#125;<br><br><span class="hljs-type">int</span> <span class="hljs-title function_">main</span><span class="hljs-params">(<span class="hljs-type">int</span> argc, <span class="hljs-type">char</span> **argv)</span> &#123;<br>  <span class="hljs-type">int</span> M = <span class="hljs-number">2048</span>, K = <span class="hljs-number">4096</span>, N = <span class="hljs-number">3072</span>;<br><br>  <span class="hljs-type">size_t</span> Abytes = (<span class="hljs-type">size_t</span>)M * K * <span class="hljs-keyword">sizeof</span>(<span class="hljs-type">float</span>);<br>  <span class="hljs-type">size_t</span> Bbytes = (<span class="hljs-type">size_t</span>)K * N * <span class="hljs-keyword">sizeof</span>(<span class="hljs-type">float</span>);<br>  <span class="hljs-type">size_t</span> Cbytes = (<span class="hljs-type">size_t</span>)M * N * <span class="hljs-keyword">sizeof</span>(<span class="hljs-type">float</span>);<br><br>  <span class="hljs-type">float</span> *h_A = (<span class="hljs-type">float</span> *)<span class="hljs-built_in">malloc</span>(Abytes);<br>  <span class="hljs-type">float</span> *h_B = (<span class="hljs-type">float</span> *)<span class="hljs-built_in">malloc</span>(Bbytes);<br>  <span class="hljs-type">float</span> *h_C = (<span class="hljs-type">float</span> *)<span class="hljs-built_in">malloc</span>(Cbytes);<br>  <span class="hljs-type">float</span> *h_ref = (<span class="hljs-type">float</span> *)<span class="hljs-built_in">malloc</span>(Cbytes);<br>  <span class="hljs-keyword">if</span> (!h_A || !h_B || !h_C || !h_ref) &#123;<br>    <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;A/B/C malloc failed!\n&quot;</span>);<br>    <span class="hljs-keyword">return</span> <span class="hljs-number">1</span>;<br>  &#125;<br>  init_float_normal(h_A, M * K, <span class="hljs-number">0.0f</span>, <span class="hljs-number">1.0f</span>);<br>  init_float_normal(h_B, K * N, <span class="hljs-number">0.0f</span>, <span class="hljs-number">1.0f</span>);<br><br>  <span class="hljs-type">float</span> *d_A, *d_B, *d_C;<br>  CHECK_CUDA(cudaMalloc(&amp;d_A, Abytes));<br>  CHECK_CUDA(cudaMalloc(&amp;d_B, Bbytes));<br>  CHECK_CUDA(cudaMalloc(&amp;d_C, Cbytes));<br>  CHECK_CUDA(cudaMemcpy(d_A, h_A, Abytes, cudaMemcpyHostToDevice));<br>  CHECK_CUDA(cudaMemcpy(d_B, h_B, Bbytes, cudaMemcpyHostToDevice));<br><br>  <span class="hljs-comment">// CPU 参考计算</span><br>  sgemm_cpu(h_ref, h_A, h_B, M, N, K);<br><br>  dim3 <span class="hljs-title function_">blockDim</span><span class="hljs-params">(WS, WS)</span>;<br>  <span class="hljs-type">int</span> gx = (N + WS - <span class="hljs-number">1</span>) / WS;<br>  <span class="hljs-type">int</span> gy = (M + WS - <span class="hljs-number">1</span>) / WS;<br>  dim3 <span class="hljs-title function_">gridDim</span><span class="hljs-params">(gx, gy)</span>;<br><br>  <span class="hljs-comment">// warmup</span><br>  sgemm_kernel1&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;(d_C, d_A, d_B, M, N, K);<br>  CHECK_CUDA(cudaGetLastError());<br>  CHECK_CUDA(cudaMemcpy(h_C, d_C, Cbytes, cudaMemcpyDeviceToHost));<br>  check_results(h_C, h_ref, M * N, <span class="hljs-number">5e-4</span>f);<br><br>  <span class="hljs-type">int</span> repeat = argc &gt; <span class="hljs-number">1</span> ? atoi(argv[<span class="hljs-number">1</span>]) : <span class="hljs-number">20</span>;<br>  CudaTimer timer;<br>  cuda_timer_start(&amp;timer);<br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> r = <span class="hljs-number">0</span>; r &lt; repeat; r++) &#123;<br>    sgemm_kernel1&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;(d_C, d_A, d_B, M, N, K);<br>    CHECK_CUDA(cudaGetLastError());<br>  &#125;<br>  <span class="hljs-type">float</span> ms = cuda_timer_stop(&amp;timer);<br>  <span class="hljs-type">float</span> avg_ms = ms / repeat;<br>  <span class="hljs-type">double</span> gflops = <span class="hljs-number">2.0</span> * M * N * K / (avg_ms * <span class="hljs-number">1e6</span>);<br>  <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;avg %.3f ms | %.1f GFLOPS | &quot;</span>, avg_ms, gflops);<br><br>  <span class="hljs-built_in">free</span>(h_ref);<br>  <span class="hljs-built_in">free</span>(h_A);<br>  <span class="hljs-built_in">free</span>(h_B);<br>  <span class="hljs-built_in">free</span>(h_C);<br>  CHECK_CUDA(cudaFree(d_A));<br>  CHECK_CUDA(cudaFree(d_B));<br>  CHECK_CUDA(cudaFree(d_C));<br>  <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br><br></code></pre></td></tr></table></figure>
+<h3 id="内存访问模式分析">内存访问模式分析</h3>
+<p>朴素实现虽然逻辑清晰，但内存访问效率极低。以 $M=N=K=1024$ 为例逐一分析：</p>
+<p><strong>单线程视角</strong></p>
+<p>每个线程负责一个 $C[i][j]$，需要：</p>
+<ul>
+<li>
+<p>读取 A 的第 i 行：$K$ 个 float = $4K$ 字节</p>
+</li>
+<li>
+<p>读取 B 的第 j 列：$K$ 个 float = $4K$ 字节</p>
+</li>
+<li>
+<p>写入 C 的 1 个元素：$4$ 字节</p>
+</li>
+</ul>
+<p>单线程总访存量 = $8K + 4$ 字节，计算量为 $2K$ FLOPs。</p>
+<p><strong>全局视角：重复读取问题</strong></p>
+<p>问题在于不同线程之间存在大量重复的全局内存访问：</p>
+<ul>
+<li>
+<p><strong>A 矩阵的行复用</strong>：A 的第 i 行被负责 $C[i][0], C[i][1], \dots, C[i][N-1]$ 的 $N$ 个线程各自完整读取一遍，同一行数据被重复读取 $N$ 次。</p>
+</li>
+<li>
+<p><strong>B 矩阵的列复用</strong>：B 的第 j 列被负责 $C[0][j], C[1][j], \dots, C[M-1][j]$ 的 $M$ 个线程各自完整读取一遍，同一列数据被重复读取 $M$ 次。</p>
+</li>
+</ul>
+<p>总全局内存读取量：</p>
+<p>$$Read_{global} = M \times N \times (K + K) \times 4 = 8MNK \text{ 字节}$$</p>
+<p>但实际只需 $4(MK + KN)$ 字节。当 $M=N=K$ 时：</p>
+<p>$$Read_{global} = 8N^3,\quad Read_{ideal}=8N^2,\quad 冗余比 = N$$</p>
+<p>以 $N=1024$ 为例，全局内存读取量是理论最小值的 <strong>1024 倍</strong>，绝大部分带宽被浪费在重复读取上。</p>
+<p><strong>有效计算强度</strong></p>
+<p>理论计算强度 $I_{peak}=N/6$，而朴素实现的实际计算强度：</p>
+<p>$$I_{effective} = \frac{2MNK}{8MNK} = \frac{1}{4} \text{ FLOPs/byte}$$</p>
+<p>与矩阵规模 N 无关！无论矩阵多大，有效计算强度恒定为 0.25 FLOPs/byte，完全受限于内存带宽。</p>
+<h3 id="性能瓶颈与-Roofline-模型">性能瓶颈与 Roofline 模型</h3>
+<p>Roofline 模型是分析计算瓶颈的经典工具。横轴为算术强度（FLOPs/byte），纵轴为可达到的性能（FLOPs/s）。模型由两部分组成：</p>
+<ul>
+<li>
+<p><strong>内存带宽边界（斜线）</strong>：$P = bs \times I$，当计算强度较低时，性能受限于内存带宽。</p>
+</li>
+<li>
+<p><strong>计算峰值边界（水平线）</strong>：$P = P_{peak}$，当计算强度足够高时，性能受限于算力天花板。</p>
+</li>
+</ul>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1783776977237.png" alt="74413a8e-14f2-4246-8d0c-de39c0f93d35"></p>
+<p>以 NVIDIA A100 为例（显存带宽约 1555 GB/s，FP32 峰值约 19.5 TFLOPS），两条线的交点（ridge point）约为：</p>
+<p>$$I_{ridge} = \frac{19.5 \times 10^{12}}{1555 \times 10^9} \approx 12.5 \text{ FLOPs/byte}$$</p>
+<p>即需要 $I &gt; 12.5$ 才能突破带宽瓶颈。而朴素 V1 的有效计算强度仅为 $0.25$，远低于 ridge point。这意味着：</p>
+<ul>
+<li>
+<p>朴素实现处于 Roofline 模型的<strong>陡峭斜线区域</strong>，性能完全由内存带宽决定。</p>
+</li>
+<li>
+<p>即使 GPU 有强大的计算能力，绝大部分时间也在等待数据从全局内存加载。</p>
+</li>
+<li>
+<p>要提升性能，核心思路是<strong>提高有效计算强度</strong>——减少对全局内存的访问，通过数据复用将 $I_{effective}$ 推向 ridge point。</p>
+</li>
+</ul>
+<p><strong>实测性能参考</strong>（$M=N=K=4096$，FP32，A100）：</p>
+<table>
+<thead>
+<tr>
+<th>实现版本</th>
+<th>耗时</th>
+<th>GFLOPS</th>
+<th>带宽利用率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V1 Naive</td>
+<td>~120 ms</td>
+<td>~1150</td>
+<td>~8%</td>
+</tr>
+<tr>
+<td>cuBLAS</td>
+<td>~0.8 ms</td>
+<td>~172000</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>朴素实现仅达到理论峰值的约 <strong>5.9%</strong>，与高度优化的 cuBLAS 相比差距超过 <strong>100 倍</strong>，优化空间巨大。</p>
+<h3 id="优化方向">优化方向</h3>
+<p>从上述分析可以看出，朴素实现的根本瓶颈在于<strong>全局内存的重复访问</strong>。后续优化版本将围绕&quot;数据复用&quot;这一核心思想展开：</p>
+<ul>
+<li><strong>V2：共享内存分块（Tiling）</strong>——将矩阵分块加载到共享内存中，块内线程复用同一份数据，大幅减少全局内存访问。</li>
+</ul>
+<h2 id="版本V1共享内存分块">版本V1共享内存分块</h2>
+<h3 id="分块计算的基本原理">分块计算的基本原理</h3>
+<p>分块（Tiling）是高性能计算中一种关键的优化技术，其核心思想是将大规模的数据集（如大型矩阵）分解为更小的、可管理的“块”，使得每个数据块能够完全放入高速但容量有限的片上内存（如CUDA的共享内存）中。</p>
+<p><strong>其核心目标</strong></p>
+<ul>
+<li>
+<p><strong>提高数据局部性</strong>：让计算单元反复使用已加载到高速内存中的数据</p>
+</li>
+<li>
+<p><strong>减少全局内存访问</strong>：全局内存访问延迟高、带宽有限，是性能的主要瓶颈。</p>
+</li>
+<li>
+<p><strong>隐藏内存延迟</strong>：通过让更多的线程在等待数据时执行计算，提高硬件利用率。</p>
+</li>
+</ul>
+<h3 id="具体做法">具体做法</h3>
+<p>针对矩阵乘法 $C = A \times B$，每个线程块负责计算 $C$ 的一个分块（tile）。将 $A$ 和 $B$ 的对应分块加载到共享内存中，线程块内的各线程协力从共享内存读取数据，完成该分块的累加计算。</p>
+<p>具体做法：</p>
+<ul>
+<li>
+<p>将 $C$ 分解为大小为 $TILE_M \times TILE_N$ 的子块，每个线程块计算一个子块。</p>
+</li>
+<li>
+<p>计算该子块需要 $A$ 的 $TILE_M$ 行与 $B$ 的 $TILE_N$ 列。沿公共维度 $K$ 再划分步长为 $TILE_K$ 的滑动窗口，每次将 $A$ 的 $TILE_M \times TILE_K$ 分块和 $B$ 的 $TILE_K \times TILE_N$ 分块从全局内存加载到共享内存中。</p>
+</li>
+<li>
+<p>线程块内所有线程协作，将这两个共享内存分块中的值相乘并累加到局部寄存器中，一个分块计算完毕后，滑动窗口向前移动，直到覆盖整个 $K$ 维。</p>
+</li>
+<li>
+<p>计算过程中，每个 $A$ 元素被 $TILE_N$ 次复用，每个 $B$ 元素被 $TILE_M$ 次复用，显著提高了数据局部性。</p>
+</li>
+</ul>
+<p>通过这种方式，分块计算将原本 $O(MNK)$ 次全局内存访问大幅降低，有效计算强度 $I_{effective}$ 提升至 $\frac{2 \times TILE_M \times TILE_N \times TILE_K}{(TILE_M \times TILE_K + TILE_N \times TILE_K) \times 4}$（FP32），只要分块尺寸选择得当，就能使 $I_{effective}$ 接近 ridge point 甚至进入计算密集区域，从而突破带宽瓶颈。</p>
+<p><strong>CUDA Kernel 代码实现</strong></p>
+<figure class="highlight c"><table><tr><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;utils.h&quot;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;stdio.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;stdlib.h&gt;</span></span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> WS 32</span><br><br>__global__ <span class="hljs-type">void</span> <span class="hljs-title function_">sgemm_kernel2</span><span class="hljs-params">(<span class="hljs-type">float</span> *C, <span class="hljs-type">const</span> <span class="hljs-type">float</span> *A, <span class="hljs-type">const</span> <span class="hljs-type">float</span> *B, <span class="hljs-type">int</span> M,</span><br><span class="hljs-params">                              <span class="hljs-type">int</span> N, <span class="hljs-type">int</span> K)</span> &#123;<br>  <span class="hljs-type">int</span> tx = threadIdx.x;<br>  <span class="hljs-type">int</span> ty = threadIdx.y;<br>  <span class="hljs-type">int</span> col = tx + blockDim.x * blockIdx.x;<br>  <span class="hljs-type">int</span> row = ty + blockDim.y * blockIdx.y;<br><br>  __shared__ <span class="hljs-type">float</span> As[WS][WS];<br>  __shared__ <span class="hljs-type">float</span> Bs[WS][WS];<br><br>  <span class="hljs-type">int</span> ntiles = (K + WS - <span class="hljs-number">1</span>) / WS;<br>  <span class="hljs-type">float</span> val = <span class="hljs-number">0.0f</span>;<br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> nt = <span class="hljs-number">0</span>; nt &lt; ntiles; ++nt) &#123;<br>    <span class="hljs-comment">// 1. 全局的A/B -&gt; 共享 As/Bs</span><br>    <span class="hljs-keyword">if</span> (row &lt; M &amp;&amp; (tx + nt * WS) &lt; K) &#123;<br>      As[ty][tx] = A[row * K + tx + nt * WS];<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>      As[ty][tx] = <span class="hljs-number">0.0f</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> (col &lt; N &amp;&amp; (ty + nt * WS) &lt; K) &#123;<br>      Bs[ty][tx] = B[(ty + nt * WS) * N + col];<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>      Bs[ty][tx] = <span class="hljs-number">0.0f</span>;<br>    &#125;<br><br>    __syncthreads();<br><br>    <span class="hljs-comment">// 2. 局部累积</span><br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> k = <span class="hljs-number">0</span>; k &lt; WS; ++k) &#123;<br>      val += As[ty][k] * Bs[k][tx];<br>    &#125;<br>    __syncthreads();<br>  &#125;<br><br>  <span class="hljs-keyword">if</span> (row &lt; M || col &lt; N)<br>    C[col + row * N] = val;<br>&#125;<br><br><span class="hljs-type">int</span> <span class="hljs-title function_">main</span><span class="hljs-params">(<span class="hljs-type">int</span> argc, <span class="hljs-type">char</span> **argv)</span> &#123;<br>  <span class="hljs-type">int</span> M = <span class="hljs-number">2048</span>, K = <span class="hljs-number">4096</span>, N = <span class="hljs-number">3072</span>;<br><br>  <span class="hljs-type">size_t</span> Abytes = (<span class="hljs-type">size_t</span>)M * K * <span class="hljs-keyword">sizeof</span>(<span class="hljs-type">float</span>);<br>  <span class="hljs-type">size_t</span> Bbytes = (<span class="hljs-type">size_t</span>)K * N * <span class="hljs-keyword">sizeof</span>(<span class="hljs-type">float</span>);<br>  <span class="hljs-type">size_t</span> Cbytes = (<span class="hljs-type">size_t</span>)M * N * <span class="hljs-keyword">sizeof</span>(<span class="hljs-type">float</span>);<br><br>  <span class="hljs-type">float</span> *h_A = (<span class="hljs-type">float</span> *)<span class="hljs-built_in">malloc</span>(Abytes);<br>  <span class="hljs-type">float</span> *h_B = (<span class="hljs-type">float</span> *)<span class="hljs-built_in">malloc</span>(Bbytes);<br>  <span class="hljs-type">float</span> *h_C = (<span class="hljs-type">float</span> *)<span class="hljs-built_in">malloc</span>(Cbytes);<br>  <span class="hljs-type">float</span> *h_ref = (<span class="hljs-type">float</span> *)<span class="hljs-built_in">malloc</span>(Cbytes);<br>  <span class="hljs-keyword">if</span> (!h_A || !h_B || !h_C || !h_ref) &#123;<br>    <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;A/B/C malloc failed!\n&quot;</span>);<br>    <span class="hljs-keyword">return</span> <span class="hljs-number">1</span>;<br>  &#125;<br>  init_float_normal(h_A, M * K, <span class="hljs-number">0.0f</span>, <span class="hljs-number">1.0f</span>);<br>  init_float_normal(h_B, K * N, <span class="hljs-number">0.0f</span>, <span class="hljs-number">1.0f</span>);<br><br>  <span class="hljs-type">float</span> *d_A, *d_B, *d_C;<br>  CHECK_CUDA(cudaMalloc(&amp;d_A, Abytes));<br>  CHECK_CUDA(cudaMalloc(&amp;d_B, Bbytes));<br>  CHECK_CUDA(cudaMalloc(&amp;d_C, Cbytes));<br>  CHECK_CUDA(cudaMemcpy(d_A, h_A, Abytes, cudaMemcpyHostToDevice));<br>  CHECK_CUDA(cudaMemcpy(d_B, h_B, Bbytes, cudaMemcpyHostToDevice));<br><br>  <span class="hljs-comment">// CPU 参考计算</span><br>  sgemm_cpu(h_ref, h_A, h_B, M, N, K);<br><br>  dim3 <span class="hljs-title function_">blockDim</span><span class="hljs-params">(WS, WS)</span>;<br>  <span class="hljs-type">int</span> gx = (N + WS - <span class="hljs-number">1</span>) / WS;<br>  <span class="hljs-type">int</span> gy = (M + WS - <span class="hljs-number">1</span>) / WS;<br>  dim3 <span class="hljs-title function_">gridDim</span><span class="hljs-params">(gx, gy)</span>;<br><br>  <span class="hljs-comment">// warmup</span><br>  sgemm_kernel2&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;(d_C, d_A, d_B, M, N, K);<br>  CHECK_CUDA(cudaGetLastError());<br>  CHECK_CUDA(cudaMemcpy(h_C, d_C, Cbytes, cudaMemcpyDeviceToHost));<br>  check_results(h_C, h_ref, M * N, <span class="hljs-number">5e-4</span>f);<br><br>  <span class="hljs-type">int</span> repeat = argc &gt; <span class="hljs-number">1</span> ? atoi(argv[<span class="hljs-number">1</span>]) : <span class="hljs-number">20</span>;<br>  CudaTimer timer;<br>  cuda_timer_start(&amp;timer);<br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> r = <span class="hljs-number">0</span>; r &lt; repeat; r++) &#123;<br>    sgemm_kernel2&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;(d_C, d_A, d_B, M, N, K);<br>    CHECK_CUDA(cudaGetLastError());<br>  &#125;<br>  <span class="hljs-type">float</span> ms = cuda_timer_stop(&amp;timer);<br>  <span class="hljs-type">float</span> avg_ms = ms / repeat;<br>  <span class="hljs-type">double</span> gflops = <span class="hljs-number">2.0</span> * M * N * K / (avg_ms * <span class="hljs-number">1e6</span>);<br>  <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;avg %.3f ms | %.1f GFLOPS | &quot;</span>, avg_ms, gflops);<br><br>  <span class="hljs-built_in">free</span>(h_ref);<br>  <span class="hljs-built_in">free</span>(h_A);<br>  <span class="hljs-built_in">free</span>(h_B);<br>  <span class="hljs-built_in">free</span>(h_C);<br>  CHECK_CUDA(cudaFree(d_A));<br>  CHECK_CUDA(cudaFree(d_B));<br>  CHECK_CUDA(cudaFree(d_C));<br>  <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br><br></code></pre></td></tr></table></figure>
+
+    </div>
+
+    
+        <aside class="toc-sidebar">
+  <div class="toc-wrapper">
+    <h3 class="toc-title">Contents</h3>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95%E7%9A%84%E6%95%B0%E5%AD%A6%E5%AE%9A%E4%B9%89"><span class="toc-text">矩阵乘法的数学定义</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%ACV0%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95cpu%E5%AE%9E%E7%8E%B0"><span class="toc-text">版本V0矩阵乘法cpu实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%ACV1%E6%9C%B4%E7%B4%A0%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95"><span class="toc-text">版本V1朴素矩阵乘法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%EF%BC%9A%E5%85%A8%E5%B1%80%E5%86%85%E5%AD%98%E8%AE%BF%E9%97%AE"><span class="toc-text">实现原理：全局内存访问</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E8%AE%BF%E9%97%AE%E6%A8%A1%E5%BC%8F%E5%88%86%E6%9E%90"><span class="toc-text">内存访问模式分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E7%93%B6%E9%A2%88%E4%B8%8E-Roofline-%E6%A8%A1%E5%9E%8B"><span class="toc-text">性能瓶颈与 Roofline 模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E6%96%B9%E5%90%91"><span class="toc-text">优化方向</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%ACV1%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98%E5%88%86%E5%9D%97"><span class="toc-text">版本V1共享内存分块</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%9D%97%E8%AE%A1%E7%AE%97%E7%9A%84%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86"><span class="toc-text">分块计算的基本原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B7%E4%BD%93%E5%81%9A%E6%B3%95"><span class="toc-text">具体做法</span></a></li></ol></li></ol>
+  </div>
+</aside>
+
+      
+  </div>
+
+  
+
+  
+
+  <footer class="post-footer">
+    
+      <div class="post-tags">
+        
+          <a href="/tags/CUDA/">#CUDA</a>
+        
+          <a href="/tags/%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95/">#矩阵乘法</a>
+        
+      </div>
+    
+    <nav class="post-nav">
+      
+      
+        <a class="next" href="/2026/07/08/CUDA%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96%EF%BC%883%EF%BC%89%EF%BC%9ASoftmax/">CUDA算子优化(3)：Softmax &raquo;</a>
+      
+    </nav>
+  </footer>
+
+  
+    
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true
+    },
+    options: {
+      // Skip the TOC sidebar and nav so heading math copied into the TOC
+      // isn't typeset a second time.
+      ignoreHtmlClass: 'toc-sidebar|site-nav',
+      enableMenu: false
+    }
+  };
+</script>
+
+<script defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4.1.2/tex-mml-chtml.js"
+        integrity="sha384-Nfw2UPOp2WaWfAjGXccSL8qKx4KWXN9NUonXtPcotBXKSqHMyNWrahYzDzIXhpTy"
+        crossorigin="anonymous"></script>
+
+  
+</article>
+
+    </main>
+    <footer class="site-footer">
+  <div class="footer-inner">
+    
+      <p>鄂ICP备2023018829号</p>
+    
+    <p>Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &middot; Theme <a href="https://github.com/finch-xu/hexo-theme-warmpaper" target="_blank" rel="noopener">Warmpaper</a></p>
+  </div>
+</footer>
+
+  </div>
+  
+<script src="/js/main.js"></script>
+
+</body>
+</html>
