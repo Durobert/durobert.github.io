@@ -26,6 +26,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-medium/result.css">
 
   
+    
+<link rel="stylesheet" href="/css/waline.css">
+
+  
   
   
     
@@ -289,6 +293,17 @@
       
   </div>
 
+  
+    <div id="waline"></div>
+<script type="module">
+  import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+
+  init({
+    el: '#waline',
+    serverURL: 'https://www.durobert.top',
+    dark: 'html[data-theme="dark"]'
+  });
+</script>
   
 
   
