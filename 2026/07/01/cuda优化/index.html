@@ -31,6 +31,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-medium/result.css">
 
   
+    
+<link rel="stylesheet" href="/css/waline.css">
+
+  
   
   
     
@@ -224,6 +228,17 @@ Warp Divergence：GPU 最小的调度单位是Warp（32 个线程）。这 32 �
       
   </div>
 
+  
+    <div id="waline"></div>
+<script type="module">
+  import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+
+  init({
+    el: '#waline',
+    serverURL: 'https://www.durobert.top',
+    dark: 'html[data-theme="dark"]'
+  });
+</script>
   
 
   
