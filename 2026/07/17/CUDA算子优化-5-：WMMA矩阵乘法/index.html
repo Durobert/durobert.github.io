@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>CUDA算子优化(5)：WMMA矩阵乘法 | Durobert</title>
+  <meta name="description" content="WMMA（Warp-level Matrix Multiply-Accumulate）是 NVIDIA CUDA 编程模型中提供的一组底层 API，专门用于调用 GPU 的 Tensor Core 进行** Warp 级别**的矩阵乘加运算。通过该接口，开发者可直接在 Warp 层面高效执行半精度（FP16）或混合精度的矩阵计算，从而显著加速深度学习模型的训练与推理。使用时需注意内存对齐与寄存器分">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CUDA算子优化(5)：WMMA矩阵乘法">
+<meta property="og:url" content="http://example.com/2026/07/17/CUDA%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96-5-%EF%BC%9AWMMA%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95/index.html">
+<meta property="og:site_name" content="Durobert">
+<meta property="og:description" content="WMMA（Warp-level Matrix Multiply-Accumulate）是 NVIDIA CUDA 编程模型中提供的一组底层 API，专门用于调用 GPU 的 Tensor Core 进行** Warp 级别**的矩阵乘加运算。通过该接口，开发者可直接在 Warp 层面高效执行半精度（FP16）或混合精度的矩阵计算，从而显著加速深度学习模型的训练与推理。使用时需注意内存对齐与寄存器分">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-07-17T04:59:20.000Z">
+<meta property="article:modified_time" content="2026-07-17T05:01:49.818Z">
+<meta property="article:author" content="Durobert">
+<meta property="article:tag" content="CUDA">
+<meta property="article:tag" content="WMMA">
+<meta property="article:tag" content="矩阵乘法">
+<meta name="twitter:card" content="summary">
+  <link rel="icon" href="/images/logo.svg">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-regular/result.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-medium/result.css">
+
+  
+    
+<link rel="stylesheet" href="/css/waline.css">
+
+  
+  
+  
+    
+<link rel="stylesheet" href="/css/math.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('warmpaper-theme');
+        if (saved === 'dark' || saved === 'light') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (e) {}
+    })();
+  </script>
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+<body>
+  <div class="site-wrapper">
+    <header class="site-header">
+  <div class="header-inner">
+    <a class="site-title" href="/"><img class="site-logo" src="/images/logo.svg" alt="Logo">Durobert</a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+      <span class="nav-toggle-icon"></span>
+    </button>
+    <nav class="site-nav">
+      
+        <a class="nav-link" href="/">Home</a>
+      
+        <a class="nav-link" href="/archives">Archives</a>
+      
+        <a class="nav-link" href="/tags">Tags</a>
+      
+        <a class="nav-link" href="/categories">Categories</a>
+      
+        <a class="nav-link" href="/about">About</a>
+      
+      <button class="theme-toggle" type="button" aria-label="切换主题" title="切换主题" data-theme-state="light">
+        <svg class="icon-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg class="icon-moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+    <main class="main-content">
+      <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">CUDA算子优化(5)：WMMA矩阵乘法</h1>
+    <div class="post-meta">
+      <time datetime="2026-07-17T04:59:20.000Z">2026-07-17</time>
+      
+        <span class="separator">&middot;</span>
+        
+          <a href="/categories/CUDA/">CUDA</a>
+        
+      
+    </div>
+  </header>
+
+  <div class="post-body-wrapper">
+    <div class="post-content">
+      <p>WMMA（Warp-level Matrix Multiply-Accumulate）是 NVIDIA CUDA 编程模型中提供的一组底层 API，专门用于调用 GPU 的 Tensor Core 进行** Warp 级别**的矩阵乘加运算。通过该接口，开发者可直接在 Warp 层面高效执行半精度（FP16）或混合精度的矩阵计算，从而显著加速深度学习模型的训练与推理。使用时需注意内存对齐与寄存器分配，**通常需配合 Volta 架构及以上的 GPU 硬件**。</p>
+<h2 id="WMMA-API解释">WMMA API解释</h2>
+<p>Volta架构引入的新特性Tensor Cores是可编程乘法和加法单元，能够显著增加浮点计算吞吐量。每个Tensor Core执行**D = A * B + C**的运算。<strong>在Volta架构中，矩阵相乘的输入A和B是FP16的矩阵，而C和D可能是FP16或FP32的矩阵；而在图灵架构中，添加了对IN8和IN4的支持</strong>。</p>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">typename</span> Use, <span class="hljs-type">int</span> m, <span class="hljs-type">int</span> n, <span class="hljs-type">int</span> k, <span class="hljs-keyword">typename</span> T, <span class="hljs-keyword">typename</span> Layout=<span class="hljs-type">void</span>&gt; <span class="hljs-keyword">class</span> fragment;<br><br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">load_matrix_sync</span><span class="hljs-params">(fragment&lt;...&gt; &amp;a, <span class="hljs-type">const</span> T* mptr, <span class="hljs-type">unsigned</span> ldm)</span></span>;<br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">load_matrix_sync</span><span class="hljs-params">(fragment&lt;...&gt; &amp;a, <span class="hljs-type">const</span> T* mptr, <span class="hljs-type">unsigned</span> ldm, <span class="hljs-type">layout_t</span> layout)</span></span>;<br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">store_matrix_sync</span><span class="hljs-params">(T* mptr, <span class="hljs-type">const</span> fragment&lt;...&gt; &amp;a, <span class="hljs-type">unsigned</span> ldm, <span class="hljs-type">layout_t</span> layout)</span></span>;<br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">fill_fragment</span><span class="hljs-params">(fragment&lt;...&gt; &amp;a, <span class="hljs-type">const</span> T&amp; v)</span></span>;<br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">mma_sync</span><span class="hljs-params">(fragment&lt;...&gt; &amp;d, <span class="hljs-type">const</span> fragment&lt;...&gt; &amp;a, <span class="hljs-type">const</span> fragment&lt;...&gt; &amp;b, <span class="hljs-type">const</span> fragment&lt;...&gt; &amp;c, <span class="hljs-type">bool</span> satf=<span class="hljs-literal">false</span>)</span></span>;<br></code></pre></td></tr></table></figure>
+<h3 id="1-fragment">(1)fragment</h3>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">template</span>&lt;<span class="hljs-keyword">typename</span> Use, <span class="hljs-type">int</span> m, <span class="hljs-type">int</span> n, <span class="hljs-type">int</span> k, <span class="hljs-keyword">typename</span> T, <span class="hljs-keyword">typename</span> Layout=<span class="hljs-type">void</span>&gt; <span class="hljs-keyword">class</span> fragment;<br></code></pre></td></tr></table></figure>
+<p>fragment：包含分布在Warp中所有线程上的矩阵片段。</p>
+<p>Use：可用值：matrix_a、matrix_b、accumulator。matrix_a表示当前fragment用作第一个被乘数，A；matrix_b表示当前fragment用作第二个被乘数，B；accumulator表示当前fragment用作源或目标累加器（C或者D）。</p>
+<p>m、n、k：描述参与乘法累加运算的Warp宽度矩阵块的形状，matrix_a块的尺寸为m * k；matrix_b的尺寸为k * n；accumulator块的尺寸为m * n。</p>
+<p>数据T表示数据类型，对于A和B数据类型T可以是double、float、__half、__nv_bfloat16、char或者unsigned char；对于C和D数据类型T可以是double、float、int或者__half。</p>
+<p>必须为matrix_a和matrix_b指定Layout参数，<strong><code>row_major</code></strong> 或 <strong><code>col_major</code></strong> 分别指示矩阵行或列中的元素在内存中是连续的。 <strong><code>accumulator</code></strong> 矩阵的 <strong><code>Layout</code></strong> 参数应保留默认值 <strong><code>void</code></strong> 。仅当如下所述加载或存储累加器时才指定行或列布局。</p>
+<h3 id="2-load-matrix-sync">(2)load_matrix_sync</h3>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">load_matrix_sync</span><span class="hljs-params">(fragment&lt;...&gt; &amp;a, <span class="hljs-type">const</span> T* mptr, <span class="hljs-type">unsigned</span> ldm)</span></span>;<br><span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">load_matrix_sync</span><span class="hljs-params">(fragment&lt;...&gt; &amp;a, <span class="hljs-type">const</span> T* mptr, <span class="hljs-type">unsigned</span> ldm, <span class="hljs-type">layout_t</span> layout)</span></span>;<br></code></pre></td></tr></table></figure>
+<p>等到所有 Warp 通道都到达 load_matrix_sync 时，才从内存加载矩阵fragment a。</p>
+<p>mptr 必须是指向内存中矩阵第一个元素的 <strong><code>mptr</code></strong> 位对齐指针 <strong><code>ldm</code></strong> 描述连续行（对于行主布局）或列（对于列主布局）之间元素的步幅，并且对于 <code>__half</code> 元素类型必须是 8 的倍数，对于 <code>float</code> 元素类型必须是 4 的倍数。（即，两种情况下均为 16 字节的倍数）。</p>
+<p>如果片段是 <strong><code>accumulator</code></strong> ，则必须将 <strong><code>layout</code></strong> 参数指定为 <strong><code>mem_row_major</code></strong> 或 <strong><code>mem_col_major</code></strong> 。对于 <strong><code>matrix_a</code></strong> 和 <strong><code>matrix_b</code></strong> 片段，布局是从片段的 <strong><code>layout</code></strong> 参数推断出来的。</p>
+<h3 id="3-store-matrix-sync">(3)store_matrix_sync</h3>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><code class="hljs plaintext">void store_matrix_sync(T* mptr, const fragment&lt;...&gt; &amp;a, unsigned ldm, layout_t layout);<br></code></pre></td></tr></table></figure>
+<p>等待所有 Warp 通道都到达 store_matrix_sync 后，将矩阵片段 a 存储到内存中。</p>
+<p>mptr 必须是指向内存中矩阵首元素的 <strong><code>mptr</code></strong> 位对齐指针 <strong><code>ldm</code></strong> 描述连续行（对于行主布局）或列（对于列主布局）之间元素的步幅，对于 <code>__half</code> 元素类型，必须是 8 的倍数；对于 <code>float</code> 元素类型，必须是 4 的倍数。（即，两种情况下均为 16 字节的倍数）。</p>
+<p>输出矩阵的布局必须指定为 <strong><code>mem_row_major</code></strong> 或 <strong><code>mem_col_major</code></strong> 。</p>
+<p>所有 Warp 线程的 <strong><code>mptr</code></strong> 、 <strong><code>ldm</code></strong> 、 <strong><code>layout</code></strong> 和 a 的所有模板参数的值必须相同。</p>
+<h3 id="4-fill-fragment">(4)fill_fragment</h3>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><code class="hljs plaintext">void fill_fragment(fragment&lt;...&gt; &amp;a, const T&amp; v);<br></code></pre></td></tr></table></figure>
+<p>用常数值 <strong><code>v</code></strong> 填充矩阵片段。由于矩阵元素到每个片段的映射未指定，因此该函数通常由 warp 中的所有线程使用公共的 <strong><code>v</code></strong> 值来调用。</p>
+<h3 id="5-mma-sync">(5)mma_sync</h3>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><code class="hljs plaintext">void mma_sync(fragment&lt;...&gt; &amp;d, const fragment&lt;...&gt; &amp;a, const fragment&lt;...&gt; &amp;b, const fragment&lt;...&gt; &amp;c, bool satf=false);<br></code></pre></td></tr></table></figure>
+<p>等待所有 Warp 通道到达 mma_sync 后，执行 Warp 同步矩阵乘法累加运算 <code>D=A*B+C</code> 。同时支持就地运算 <code>C=A*B+C</code> 。Warp 中所有线程的每个矩阵片段的 <strong><code>satf</code></strong> 值和模板参数值必须相同。此外，片段 <strong><code>A</code></strong> 、 <strong><code>B</code></strong> 、 <strong><code>C</code></strong> 和 <strong><code>D</code></strong> 的模板参数 <strong><code>m</code></strong> 、 <strong><code>n</code></strong> 和 <strong><code>k</code></strong> 必须匹配。Warp 中的所有线程都必须调用此函数，否则结果未定义。</p>
+<p>如果 <strong><code>satf</code></strong> （饱和为有限值）模式为 <strong><code>true</code></strong> ，则以下附加数值属性适用于目标累加器：</p>
+<p>如果元素结果为 +Infinity，则相应的累加器将包含 <code>+MAX_NORM</code></p>
+<p>如果元素结果为-Infinity，则相应的累加器将包含 <code>-MAX_NORM</code></p>
+<p>如果元素结果为 NaN，则相应的累加器将包含 <code>+0</code></p>
+<h2 id="朴素WMMA矩阵乘法">朴素WMMA矩阵乘法</h2>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">namespace</span> wmma = nvcuda::wmma;<br><br><span class="hljs-keyword">enum</span> &#123;<br>  GEMM_M = <span class="hljs-number">4096</span>,<br>  GEMM_N = <span class="hljs-number">4096</span>,<br>  GEMM_K = <span class="hljs-number">4096</span>,<br><br>  WMMA_M = <span class="hljs-number">16</span>,<br>  WMMA_N = <span class="hljs-number">16</span>,<br>  WMMA_K = <span class="hljs-number">16</span>,<br><br>  WARMUP_ITERS = <span class="hljs-number">10</span>,<br>  BENCHMARK_ITERS = <span class="hljs-number">50</span><br>&#125;;<br><br><span class="hljs-function">__global__ <span class="hljs-type">void</span> <span class="hljs-title">naive_wmma_kernel</span><span class="hljs-params">(<span class="hljs-type">const</span> __half *A, <span class="hljs-type">const</span> __half *B, <span class="hljs-type">float</span> *C)</span> </span>&#123;<br>  <span class="hljs-type">int</span> tile_row = blockIdx.y;<br>  <span class="hljs-type">int</span> tile_col = blockIdx.x;<br><br>  <span class="hljs-type">int</span> row = tile_row * WMMA_M;<br>  <span class="hljs-type">int</span> col = tile_col * WMMA_N;<br><br>  wmma::fragment&lt;wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, __half,<br>                 wmma::row_major&gt;<br>      a_frag;<br>  wmma::fragment&lt;wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, __half,<br>                 wmma::row_major&gt;<br>      b_frag;<br>  wmma::fragment&lt;wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, <span class="hljs-type">float</span>&gt; c_frag;<br>  wmma::<span class="hljs-built_in">fill_fragment</span>(c_frag, <span class="hljs-number">0.0f</span>);<br><br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> k0 = <span class="hljs-number">0</span>; k0 &lt; GEMM_K; k0 += WMMA_K) &#123;<br>    <span class="hljs-type">const</span> __half *a_tile_ptr = A + row * GEMM_K + k0;<br>    <span class="hljs-type">const</span> __half *b_tile_ptr = B + k0 * GEMM_N + col;<br>    wmma::<span class="hljs-built_in">load_matrix_sync</span>(a_frag, a_tile_ptr, GEMM_K);<br>    wmma::<span class="hljs-built_in">load_matrix_sync</span>(b_frag, b_tile_ptr, GEMM_N);<br>    wmma::<span class="hljs-built_in">mma_sync</span>(c_frag, a_frag, b_frag, c_frag);<br>  &#125;<br>  <span class="hljs-type">float</span> *c_tile_ptr = C + row * GEMM_N + col;<br>  wmma::<span class="hljs-built_in">store_matrix_sync</span>(c_tile_ptr, c_frag, GEMM_N, wmma::mem_row_major);<br>&#125;<br><br><span class="hljs-function">dim3 <span class="hljs-title">block</span><span class="hljs-params">(<span class="hljs-number">32</span>)</span></span>;<br><span class="hljs-function">dim3 <span class="hljs-title">grid</span><span class="hljs-params">(GEMM_N / WMMA_N, GEMM_M / WMMA_M)</span></span>;<br><br>naive_wmma_kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;(d_A, d_B, d_C_wmma);<br></code></pre></td></tr></table></figure>
+<h3 id="代码逐段解析">代码逐段解析</h3>
+<h4 id="1-参数枚举与-Tile-尺寸定义">1. 参数枚举与 Tile 尺寸定义</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">enum</span> &#123;<br>  GEMM_M = <span class="hljs-number">4096</span>,   <span class="hljs-comment">// 矩阵 A 的行数（M），也是矩阵 C 的行数</span><br>  GEMM_N = <span class="hljs-number">4096</span>,   <span class="hljs-comment">// 矩阵 B 的列数（N），也是矩阵 C 的列数</span><br>  GEMM_K = <span class="hljs-number">4096</span>,   <span class="hljs-comment">// 矩阵 A 的列数 = 矩阵 B 的行数（K）</span><br><br>  WMMA_M = <span class="hljs-number">16</span>,     <span class="hljs-comment">// Tensor Core 一次 warp 级乘法处理的 m 维度 tile 大小</span><br>  WMMA_N = <span class="hljs-number">16</span>,     <span class="hljs-comment">// Tensor Core 一次 warp 级乘法处理的 n 维度 tile 大小</span><br>  WMMA_K = <span class="hljs-number">16</span>,     <span class="hljs-comment">// Tensor Core 一次 warp 级乘法处理的 k 维度 tile 大小</span><br><br>  WARMUP_ITERS = <span class="hljs-number">10</span>,     <span class="hljs-comment">// GPU 预热迭代次数</span><br>  BENCHMARK_ITERS = <span class="hljs-number">50</span>  <span class="hljs-comment">// 正式性能基准迭代次数</span><br>&#125;;<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p>整体矩阵规模为 <strong>4096 × 4096</strong>。</p>
+</li>
+<li>
+<p>每个 Warp（32 个线程）负责计算一个 <strong>16 × 16</strong> 的输出 tile（<code>WMMA_M × WMMA_N</code>）。</p>
+</li>
+<li>
+<p>每个 <code>mma_sync</code> 调用完成 <strong>16 × 16 × 16</strong> 的矩阵乘累加，即一次处理 <strong>16 个 k 维度元素</strong>。</p>
+</li>
+<li>
+<p>由于 <code>GEMM_K = 4096</code>，内层循环需要执行 <code>4096 / 16 = 256</code> 次迭代才能完成整个 K 维度的累加。</p>
+</li>
+</ul>
+<h4 id="2-Kernel-函数签名">2. Kernel 函数签名</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-function">__global__ <span class="hljs-type">void</span> <span class="hljs-title">naive_wmma_kernel</span><span class="hljs-params">(<span class="hljs-type">const</span> __half *A, <span class="hljs-type">const</span> __half *B, <span class="hljs-type">float</span> *C)</span></span><br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p><code>A</code>、<code>B</code>：FP16 输入矩阵（Tensor Core 要求 A、B 为低精度输入）。</p>
+</li>
+<li>
+<p><code>C</code>：FP32 输出矩阵（累加器使用更高精度以减少误差）。</p>
+</li>
+</ul>
+<h4 id="3-Tile-索引计算">3. Tile 索引计算</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-type">int</span> tile_row = blockIdx.y;    <span class="hljs-comment">// 当前 block 在 Y 维度的索引，对应输出矩阵的行 tile</span><br><span class="hljs-type">int</span> tile_col = blockIdx.x;    <span class="hljs-comment">// 当前 block 在 X 维度的索引，对应输出矩阵的列 tile</span><br><br><span class="hljs-type">int</span> row = tile_row * WMMA_M;  <span class="hljs-comment">// 当前 block 负责的输出 tile 的起始行</span><br><span class="hljs-type">int</span> col = tile_col * WMMA_N;  <span class="hljs-comment">// 当前 block 负责的输出 tile 的起始列</span><br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p>使用 <strong>2D grid</strong> 划分：<code>blockIdx.y</code> 表示行方向上的 tile 索引，<code>blockIdx.x</code> 表示列方向上的 tile 索引。</p>
+</li>
+<li>
+<p>每个 block 负责一个完整的 <strong>16 × 16</strong> 输出 tile。</p>
+</li>
+</ul>
+<h4 id="4-声明-WMMA-Fragment">4. 声明 WMMA Fragment</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp">wmma::fragment&lt;wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, __half,<br>               wmma::row_major&gt;<br>    a_frag;<br>wmma::fragment&lt;wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, __half,<br>               wmma::row_major&gt;<br>    b_frag;<br>wmma::fragment&lt;wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, <span class="hljs-type">float</span>&gt; c_frag;<br>wmma::<span class="hljs-built_in">fill_fragment</span>(c_frag, <span class="hljs-number">0.0f</span>);<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p><strong><code>a_frag</code></strong>：类型为 <code>matrix_a</code>，形状为 <strong>16 × 16（WMMA_M × WMMA_K）</strong>，<code>row_major</code> 布局，FP16 数据。</p>
+</li>
+<li>
+<p><strong><code>b_frag</code></strong>：类型为 <code>matrix_b</code>，形状为 <strong>16 × 16（WMMA_K × WMMA_N）</strong>，<code>row_major</code> 布局，FP16 数据。</p>
+</li>
+<li>
+<p><strong><code>c_frag</code></strong>：类型为 <code>accumulator</code>，形状为 <strong>16 × 16（WMMA_M × WMMA_N）</strong>，FP32 数据（累加器不需要布局参数，保留 <code>void</code>）。</p>
+</li>
+<li>
+<p><code>fill_fragment(c_frag, 0.0f)</code>：将累加器初始化为 0。</p>
+</li>
+</ul>
+<blockquote>
+<p><strong>重要理解</strong>：Fragment 并不是一个普通的 C++ 数组，而是 <strong>分布在同一个 Warp 中 32 个线程上的寄存器集合</strong>。每个线程持有 fragment 的一部分元素，开发者无法直接索引访问单个元素（映射关系未指定），只能通过 <code>load_matrix_sync</code> / <code>store_matrix_sync</code> 进行批量加载和存储。</p>
+</blockquote>
+<h4 id="5-K-维度循环：分块累加">5. K 维度循环：分块累加</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> k0 = <span class="hljs-number">0</span>; k0 &lt; GEMM_K; k0 += WMMA_K) &#123;<br>    <span class="hljs-type">const</span> __half *a_tile_ptr = A + row * GEMM_K + k0;<br>    <span class="hljs-type">const</span> __half *b_tile_ptr = B + k0 * GEMM_N + col;<br><br>    wmma::<span class="hljs-built_in">load_matrix_sync</span>(a_frag, a_tile_ptr, GEMM_K);<br>    wmma::<span class="hljs-built_in">load_matrix_sync</span>(b_frag, b_tile_ptr, GEMM_N);<br>    wmma::<span class="hljs-built_in">mma_sync</span>(c_frag, a_frag, b_frag, c_frag);<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>这是朴素 WMMA GEMM 的核心循环逻辑：</p>
+<ol>
+<li>
+<p><strong>计算 tile 指针</strong>：</p>
+<ul>
+<li>
+<p><code>a_tile_ptr = A + row * GEMM_K + k0</code>：定位矩阵 A 中，第 <code>row</code> 行、第 <code>k0</code> 列开始的 16×16 子块。</p>
+</li>
+<li>
+<p><code>b_tile_ptr = B + k0 * GEMM_N + col</code>：定位矩阵 B 中，第 <code>k0</code> 行、第 <code>col</code> 列开始的 16×16 子块。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>加载矩阵片段</strong>：</p>
+<ul>
+<li>
+<p><code>load_matrix_sync(a_frag, a_tile_ptr, GEMM_K)</code>：从全局内存加载 A 的一个 <strong>16 × 16</strong> tile 到 <code>a_frag</code>。<code>ldm = GEMM_K = 4096</code> 告诉硬件矩阵连续行之间的跨度（leading dimension）。</p>
+</li>
+<li>
+<p><code>load_matrix_sync(b_frag, b_tile_ptr, GEMM_N)</code>：从全局内存加载 B 的一个 <strong>16 × 16</strong> tile 到 <code>b_frag</code>。<code>ldm = GEMM_N = 4096</code>。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>执行矩阵乘累加</strong>：</p>
+<ul>
+<li>
+<p><code>mma_sync(c_frag, a_frag, b_frag, c_frag)</code>：执行 <code>C += A × B</code>。</p>
+</li>
+<li>
+<p>这是<strong>就地运算</strong>：输出累加器 <code>c_frag</code> 同时作为源累加器 <code>C</code> 和目标累加器 <code>D</code>。</p>
+</li>
+<li>
+<p>此调用是 <strong>Warp 同步</strong>的，所有 32 个线程必须同时到达此处。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>循环迭代</strong>：<code>k0</code> 从 0 步进到 4080（<code>GEMM_K - WMMA_K</code>），共 256 步。每一步将结果累加到 <code>c_frag</code> 中。</p>
+</li>
+</ol>
+<h4 id="6-存储结果">6. 存储结果</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-type">float</span> *c_tile_ptr = C + row * GEMM_N + col;<br>wmma::<span class="hljs-built_in">store_matrix_sync</span>(c_tile_ptr, c_frag, GEMM_N, wmma::mem_row_major);<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p>将累加完成的 <strong>16 × 16</strong> 输出矩阵从 <code>c_frag</code> 写回全局内存。</p>
+</li>
+<li>
+<p><code>store_matrix_sync</code> 同样是 Warp 同步操作。</p>
+</li>
+<li>
+<p><code>ldm = GEMM_N = 4096</code>：矩阵 C 的 leading dimension。</p>
+</li>
+<li>
+<p>布局指定为 <code>mem_row_major</code>，即按行主序存储。</p>
+</li>
+</ul>
+<h4 id="7-Grid-与-Block-配置">7. Grid 与 Block 配置</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-function">dim3 <span class="hljs-title">block</span><span class="hljs-params">(<span class="hljs-number">32</span>)</span></span>;                                <span class="hljs-comment">// 每个 block 1 个 Warp = 32 线程</span><br><span class="hljs-function">dim3 <span class="hljs-title">grid</span><span class="hljs-params">(GEMM_N / WMMA_N, GEMM_M / WMMA_M)</span></span>;   <span class="hljs-comment">// grid = (256, 256)</span><br><br>naive_wmma_kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;(d_A, d_B, d_C_wmma);<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p><strong>每个 block 只包含 32 个线程</strong>（一个 Warp）。这是因为 WMMA API 本身就是 Warp 级别的操作，不需要跨 Warp 协作。</p>
+</li>
+<li>
+<p>Grid 尺寸为 <strong>256 × 256</strong> = 65536 个 block。每个 block 输出 16 × 16 = 256 个元素，总共输出 65536 × 256 = 16,777,216 个元素，正好是 <strong>4096 × 4096</strong> 的矩阵大小。</p>
+</li>
+<li>
+<p>理论上 GPU 可以并行调度所有 block，但实际受限于 SM 数量和寄存器资源。</p>
+</li>
+</ul>
+<h3 id="朴素实现的局限性">朴素实现的局限性</h3>
+<p>这段代码虽然正确实现了基于 WMMA 的 GEMM，但存在明显的性能问题：</p>
+<ol>
+<li>
+<p><strong>全局内存访问未合并</strong>：每个 Warp 的 32 个线程从全局内存加载矩阵 A 和 B 的 tile 时，访问模式是非连续（stride 为 <code>GEMM_K</code> 或 <code>GEMM_N</code>）的跨步访问，导致内存带宽利用率低下。</p>
+</li>
+<li>
+<p><strong>无共享内存缓存</strong>：每个 Warp 每次循环迭代都直接从全局内存加载 tile，没有利用共享内存进行数据复用。同一个矩阵元素可能被多个 Warp 多次读取（例如，矩阵 A 的一行需要被多个输出 tile 共享），但这里完全没有复用。</p>
+</li>
+<li>
+<p><strong>寄存器压力敏感</strong>：每个 Warp 持有多个 fragment（a_frag、b_frag、c_frag），这些都占用寄存器。32 线程 × 每个 fragment 所需的寄存器 → 可能成为 occupancy 瓶颈。</p>
+</li>
+<li>
+<p><strong>缺乏双缓冲（Double Buffering）</strong>：加载和计算串行执行，没有通过 pipeline 掩盖内存延迟。</p>
+</li>
+</ol>
+<p>为了解决这些问题，更高效的实现通常会引入<strong>共享内存分块（Shared Memory Tiling）和</strong>向量化加载。</p>
+<h2 id="WMMA共享内存">WMMA共享内存</h2>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">namespace</span> wmma = nvcuda::wmma;<br><br><span class="hljs-keyword">enum</span> &#123;<br>  GEMM_M = <span class="hljs-number">4096</span>,<br>  GEMM_N = <span class="hljs-number">4096</span>,<br>  GEMM_K = <span class="hljs-number">4096</span>,<br><br>  WMMA_M = <span class="hljs-number">16</span>,<br>  WMMA_N = <span class="hljs-number">16</span>,<br>  WMMA_K = <span class="hljs-number">16</span>,<br><br>  BLOCK_M = <span class="hljs-number">64</span>,<br>  BLOCK_N = <span class="hljs-number">64</span>,<br><br>  WARP_TILE_M = <span class="hljs-number">16</span>,<br>  WARP_TILE_N = <span class="hljs-number">32</span>,<br><br>  WARPS_M = BLOCK_M / WARP_TILE_M,<br>  WARPS_N = BLOCK_N / WARP_TILE_N,<br>  WARPS_PER_BLOCK = WARPS_M * WARPS_N,<br>  WARP_SIZE = <span class="hljs-number">32</span>,<br>  BLOCK_THREADS = WARPS_PER_BLOCK * WARP_SIZE,<br><br>  C_TILES_PER_WARP = WARP_TILE_N / WMMA_N,<br><br>  WARMUP_ITERS = <span class="hljs-number">10</span>,<br>  BENCHMARK_ITERS = <span class="hljs-number">50</span><br>&#125;;<br><br><span class="hljs-function">__global__ <span class="hljs-type">void</span> <span class="hljs-title">shared_wmma_kernel</span><span class="hljs-params">(<span class="hljs-type">const</span> __half *A, <span class="hljs-type">const</span> __half *B, <span class="hljs-type">float</span> *C)</span> </span>&#123;<br>  __shared__ __half shared_A[BLOCK_M * WMMA_K];<br><br>  __shared__ __half shared_B[WMMA_K * BLOCK_N];<br><br>  <span class="hljs-type">int</span> tid = threadIdx.x;<br>  <span class="hljs-type">int</span> warp_id = tid / WARP_SIZE;<br><br>  <span class="hljs-type">int</span> warp_m = warp_id / WARPS_N;<br>  <span class="hljs-type">int</span> warp_n = warp_id % WARPS_N;<br><br>  <span class="hljs-type">int</span> block_row = blockIdx.y * BLOCK_M;<br>  <span class="hljs-type">int</span> block_col = blockIdx.x * BLOCK_N;<br><br>  <span class="hljs-type">int</span> warp_row = warp_m * WARP_TILE_M;<br>  <span class="hljs-type">int</span> warp_col = warp_n * WARP_TILE_N;<br><br>  wmma::fragment&lt;wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, __half,<br>                 wmma::row_major&gt;<br>      a_frag;<br><br>  wmma::fragment&lt;wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, __half,<br>                 wmma::row_major&gt;<br>      b_frag[C_TILES_PER_WARP];<br><br>  wmma::fragment&lt;wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, <span class="hljs-type">float</span>&gt;<br>      c_frag[C_TILES_PER_WARP];<br><br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> n = <span class="hljs-number">0</span>; n &lt; C_TILES_PER_WARP; ++n) &#123;<br>    wmma::<span class="hljs-built_in">fill_fragment</span>(c_frag[n], <span class="hljs-number">0.0f</span>);<br>  &#125;<br><br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> k0 = <span class="hljs-number">0</span>; k0 &lt; GEMM_K; k0 += WMMA_K) &#123;<br>    <span class="hljs-comment">/*</span><br><span class="hljs-comment">     * Cooperatively load A[BLOCK_M, WMMA_K] from global memory.</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> index = tid; index &lt; BLOCK_M * WMMA_K; index += BLOCK_THREADS) &#123;<br>      <span class="hljs-type">int</span> local_row = index / WMMA_K;<br>      <span class="hljs-type">int</span> local_k = index % WMMA_K;<br><br>      shared_A[index] = A[(block_row + local_row) * GEMM_K + (k0 + local_k)];<br>    &#125;<br><br>    <span class="hljs-comment">/*</span><br><span class="hljs-comment">     * Cooperatively load B[WMMA_K, BLOCK_N] from global memory.</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> index = tid; index &lt; WMMA_K * BLOCK_N; index += BLOCK_THREADS) &#123;<br>      <span class="hljs-type">int</span> local_k = index / BLOCK_N;<br>      <span class="hljs-type">int</span> local_col = index % BLOCK_N;<br><br>      shared_B[index] = B[(k0 + local_k) * GEMM_N + (block_col + local_col)];<br>    &#125;<br><br>    <span class="hljs-comment">/*</span><br><span class="hljs-comment">     * All global-to-shared stores must finish before any warp reads</span><br><span class="hljs-comment">     * the current K-stage.</span><br><span class="hljs-comment">     */</span><br>    __syncthreads();<br><br>    <span class="hljs-type">const</span> __half *a_tile_ptr = shared_A + warp_row * WMMA_K;<br><br>    wmma::<span class="hljs-built_in">load_matrix_sync</span>(a_frag, a_tile_ptr, WMMA_K);<br><br>    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> n = <span class="hljs-number">0</span>; n &lt; C_TILES_PER_WARP; ++n) &#123;<br>      <span class="hljs-type">const</span> __half *b_tile_ptr = shared_B + warp_col + n * WMMA_N;<br><br>      wmma::<span class="hljs-built_in">load_matrix_sync</span>(b_frag[n], b_tile_ptr, BLOCK_N);<br><br>      wmma::<span class="hljs-built_in">mma_sync</span>(c_frag[n], a_frag, b_frag[n], c_frag[n]);<br>    &#125;<br><br>    <span class="hljs-comment">/*</span><br><span class="hljs-comment">     * No warp may overwrite shared_A/shared_B with the next K-stage</span><br><span class="hljs-comment">     * until all warps have finished reading the current stage.</span><br><span class="hljs-comment">     */</span><br>    __syncthreads();<br>  &#125;<br><br>  <span class="hljs-type">int</span> output_row = block_row + warp_row;<br>  <span class="hljs-type">int</span> output_col = block_col + warp_col;<br><br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> n = <span class="hljs-number">0</span>; n &lt; C_TILES_PER_WARP; ++n) &#123;<br>    <span class="hljs-type">float</span> *c_tile_ptr = C + output_row * GEMM_N + output_col + n * WMMA_N;<br><br>    wmma::<span class="hljs-built_in">store_matrix_sync</span>(c_tile_ptr, c_frag[n], GEMM_N, wmma::mem_row_major);<br>  &#125;<br>&#125;<br><br><span class="hljs-function">dim3 <span class="hljs-title">block</span><span class="hljs-params">(BLOCK_THREADS, <span class="hljs-number">1</span>, <span class="hljs-number">1</span>)</span></span>;<br><span class="hljs-function">dim3 <span class="hljs-title">grid</span><span class="hljs-params">(GEMM_N / BLOCK_N, GEMM_M / BLOCK_M, <span class="hljs-number">1</span>)</span></span>;<br>shared_wmma_kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;(d_A, d_B, d_C_wmma);<br></code></pre></td></tr></table></figure>
+<h3 id="代码逐段解析-2">代码逐段解析</h3>
+<h4 id="1-参数枚举与-Tile-尺寸定义-2">1. 参数枚举与 Tile 尺寸定义</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">enum</span> &#123;<br>  GEMM_M = <span class="hljs-number">4096</span>,        <span class="hljs-comment">// 矩阵 A 的行数</span><br>  GEMM_N = <span class="hljs-number">4096</span>,        <span class="hljs-comment">// 矩阵 B 的列数</span><br>  GEMM_K = <span class="hljs-number">4096</span>,        <span class="hljs-comment">// 矩阵 A 的列数 = 矩阵 B 的行数</span><br><br>  WMMA_M = <span class="hljs-number">16</span>,          <span class="hljs-comment">// Tensor Core 每次 warp 级乘法处理的 m 维度</span><br>  WMMA_N = <span class="hljs-number">16</span>,          <span class="hljs-comment">// Tensor Core 每次 warp 级乘法处理的 n 维度</span><br>  WMMA_K = <span class="hljs-number">16</span>,          <span class="hljs-comment">// Tensor Core 每次 warp 级乘法处理的 k 维度</span><br><br>  BLOCK_M = <span class="hljs-number">64</span>,         <span class="hljs-comment">// 每个 block 负责的输出行数</span><br>  BLOCK_N = <span class="hljs-number">64</span>,         <span class="hljs-comment">// 每个 block 负责的输出列数</span><br><br>  WARP_TILE_M = <span class="hljs-number">16</span>,     <span class="hljs-comment">// 每个 warp 在行方向上的 tile 高度</span><br>  WARP_TILE_N = <span class="hljs-number">32</span>,     <span class="hljs-comment">// 每个 warp 在列方向上的 tile 宽度</span><br><br>  WARPS_M = BLOCK_M / WARP_TILE_M,   <span class="hljs-comment">// block 行方向上 warp 数量 = 4</span><br>  WARPS_N = BLOCK_N / WARP_TILE_N,   <span class="hljs-comment">// block 列方向上 warp 数量 = 2</span><br>  WARPS_PER_BLOCK = WARPS_M * WARPS_N, <span class="hljs-comment">// 每个 block 总 warp 数 = 8</span><br>  WARP_SIZE = <span class="hljs-number">32</span>,       <span class="hljs-comment">// CUDA warp 线程数</span><br>  BLOCK_THREADS = WARPS_PER_BLOCK * WARP_SIZE,  <span class="hljs-comment">// 每个 block 线程数 = 256</span><br><br>  C_TILES_PER_WARP = WARP_TILE_N / WMMA_N,  <span class="hljs-comment">// 每个 warp 输出的 WMMA tile 数 = 2</span><br><br>  WARMUP_ITERS = <span class="hljs-number">10</span>,<br>  BENCHMARK_ITERS = <span class="hljs-number">50</span><br>&#125;;<br></code></pre></td></tr></table></figure>
+<p>与朴素版本的关键区别：</p>
+<ul>
+<li>
+<p><strong><code>BLOCK_M = 64, BLOCK_N = 64</code></strong>：每个 block 现在负责计算 <strong>64 × 64</strong> 的输出矩阵，而不是之前的 16 × 16。</p>
+</li>
+<li>
+<p><strong><code>WARP_TILE_M = 16, WARP_TILE_N = 32</code></strong>：每个 warp 负责 <strong>16 × 32</strong> 的输出区域，即在列方向上覆盖 2 个 WMMA_N tile。</p>
+</li>
+<li>
+<p><strong><code>WARPS_M = 4, WARPS_N = 2</code></strong>：每个 block 包含 4 × 2 = 8 个 warp，共 256 个线程。</p>
+</li>
+<li>
+<p><strong><code>C_TILES_PER_WARP = 2</code></strong>：每个 warp 需要管理 2 个输出 fragment（因为列方向为 32 ÷ 16 = 2）。</p>
+</li>
+</ul>
+<blockquote>
+<p>这种分层设计是高性能 GEMM 的典型模式：<strong>Grid → Block → Warp → WMMA Tile</strong>，每一层解决不同粒度的数据复用问题。</p>
+</blockquote>
+<h4 id="2-共享内存声明">2. 共享内存声明</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp">__shared__ __half shared_A[BLOCK_M * WMMA_K];   <span class="hljs-comment">// 64 × 16</span><br>__shared__ __half shared_B[WMMA_K * BLOCK_N];   <span class="hljs-comment">// 16 × 64</span><br></code></pre></td></tr></table></figure>
+<p>这是优化的核心——引入共享内存作为<strong>全局内存与寄存器之间的缓存层</strong>：</p>
+<ul>
+<li>
+<p><strong><code>shared_A</code></strong>：缓存矩阵 A 的一个 <strong>64 × 16</strong> 子块（<code>BLOCK_M × WMMA_K</code>）。</p>
+</li>
+<li>
+<p><strong><code>shared_B</code></strong>：缓存矩阵 B 的一个 <strong>16 × 64</strong> 子块（<code>WMMA_K × BLOCK_N</code>）。</p>
+</li>
+<li>
+<p>每次 K 循环迭代，block 内的所有线程<strong>协作加载</strong>这两个 tile 到共享内存，然后 8 个 warp 从共享内存中读取各自所需的子 tile 进行计算。</p>
+</li>
+</ul>
+<p><strong>为什么共享内存能提升性能？</strong></p>
+<ol>
+<li><strong>合并全局内存访问</strong>：协作加载时，连续的线程访问连续的内存地址，实现全局内存的合并访问（coalesced access），最大化内存带宽利用率。</li>
+<li><strong>数据复用</strong>：同一个 64×16 的 A tile 被 4 个 warp 共享（每行方向上的 warp 读取 A 的相同行）；同一个 16×64 的 B tile 被 2 个 warp 共享（每列方向上的 warp 读取 B 的相同列）。</li>
+<li><strong>减少全局内存访问次数</strong>：全局内存访问量从每个 warp 每次 K 迭代 2 次减少到<strong>每个 block 每次 K 迭代 2 次</strong>，降低了 8 倍。</li>
+</ol>
+<h4 id="3-线程与-Warp-索引计算">3. 线程与 Warp 索引计算</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-type">int</span> tid = threadIdx.x;<br><span class="hljs-type">int</span> warp_id = tid / WARP_SIZE;           <span class="hljs-comment">// 当前线程所属的 warp（0-7）</span><br><br><span class="hljs-type">int</span> warp_m = warp_id / WARPS_N;          <span class="hljs-comment">// warp 在 block 中的行索引（0-3）</span><br><span class="hljs-type">int</span> warp_n = warp_id % WARPS_N;          <span class="hljs-comment">// warp 在 block 中的列索引（0-1）</span><br></code></pre></td></tr></table></figure>
+<p>Block 内的 8 个 warp 按 <strong>4 行 × 2 列</strong> 的网格排列：</p>
+<table>
+<thead>
+<tr>
+<th>warp_id</th>
+<th>warp_m</th>
+<th>warp_n</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td>3</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>4</td>
+<td>2</td>
+<td>0</td>
+</tr>
+<tr>
+<td>5</td>
+<td>2</td>
+<td>1</td>
+</tr>
+<tr>
+<td>6</td>
+<td>3</td>
+<td>0</td>
+</tr>
+<tr>
+<td>7</td>
+<td>3</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-type">int</span> block_row = blockIdx.y * BLOCK_M;   <span class="hljs-comment">// 当前 block 在全局矩阵中的起始行</span><br><span class="hljs-type">int</span> block_col = blockIdx.x * BLOCK_N;   <span class="hljs-comment">// 当前 block 在全局矩阵中的起始列</span><br><br><span class="hljs-type">int</span> warp_row = warp_m * WARP_TILE_M;    <span class="hljs-comment">// 当前 warp 在 block 内的起始行偏移</span><br><span class="hljs-type">int</span> warp_col = warp_n * WARP_TILE_N;    <span class="hljs-comment">// 当前 warp 在 block 内的起始列偏移</span><br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p><code>block_row / block_col</code>：全局坐标，标识当前 block 负责输出矩阵的 <strong>64 × 64</strong> 区域。</p>
+</li>
+<li>
+<p><code>warp_row / warp_col</code>：局部坐标，标识当前 warp 在该 block 内的 <strong>16 × 32</strong> 子区域。</p>
+</li>
+</ul>
+<h4 id="4-声明多-Tile-Fragment-数组">4. 声明多 Tile Fragment 数组</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp">wmma::fragment&lt;wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, __half,<br>               wmma::row_major&gt;<br>    a_frag;<br><br>wmma::fragment&lt;wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, __half,<br>               wmma::row_major&gt;<br>    b_frag[C_TILES_PER_WARP];  <span class="hljs-comment">// 2 个 b fragment</span><br><br>wmma::fragment&lt;wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, <span class="hljs-type">float</span>&gt;<br>    c_frag[C_TILES_PER_WARP];  <span class="hljs-comment">// 2 个累加器 fragment</span><br></code></pre></td></tr></table></figure>
+<p>一个 warp 负责 <strong>16 × 32</strong> 的输出区域，即 <strong>2 个相邻的 WMMA tile</strong>（每个 16 × 16，沿列方向排列）：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><code class="hljs plaintext">输出区域（16 × 32）:<br>┌──────────────┬──────────────┐<br>│   c_frag[0]  │   c_frag[1]  │<br>│  (16 × 16)   │  (16 × 16)   │<br>└──────────────┴──────────────┘<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p><strong><code>a_frag</code></strong>：只有 1 个，因为两个输出 tile 共享同一个 A tile（相同行，相同的 K 维度子块）。</p>
+</li>
+<li>
+<p><strong><code>b_frag[2]</code></strong>：需要 2 个不同的 B tile（同一行，不同列范围）。</p>
+</li>
+<li>
+<p><strong><code>c_frag[2]</code></strong>：2 个累加器，分别累加两个输出 tile 的结果。</p>
+</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> n = <span class="hljs-number">0</span>; n &lt; C_TILES_PER_WARP; ++n) &#123;<br>    wmma::<span class="hljs-built_in">fill_fragment</span>(c_frag[n], <span class="hljs-number">0.0f</span>);  <span class="hljs-comment">// 两个累加器都初始化为 0</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h4 id="5-K-维度循环：协作加载-WMMA-计算">5. K 维度循环：协作加载 + WMMA 计算</h4>
+<p>这是共享内存版本的核心，分为三个阶段：<strong>协作加载 → 同步 → WMMA 计算 → 同步</strong>。</p>
+<h5 id="Stage-1：协作加载-A-Tile-到共享内存">Stage 1：协作加载 A Tile 到共享内存</h5>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> index = tid; index &lt; BLOCK_M * WMMA_K; index += BLOCK_THREADS) &#123;<br>    <span class="hljs-type">int</span> local_row = index / WMMA_K;<br>    <span class="hljs-type">int</span> local_k = index % WMMA_K;<br><br>    shared_A[index] = A[(block_row + local_row) * GEMM_K + (k0 + local_k)];<br>&#125;<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p><strong>循环模式</strong>：256 个线程以 <code>tid</code> 为起始索引，步长 256，覆盖 <code>64 × 16 = 1024</code> 个元素。</p>
+</li>
+<li>
+<p><strong><code>local_row = index / 16</code></strong>：共享内存中的行索引（0-63）。</p>
+</li>
+<li>
+<p><strong><code>local_k = index % 16</code></strong>：共享内存中的列索引（0-15）。</p>
+</li>
+<li>
+<p><strong>全局内存地址</strong>：<code>(block_row + local_row) * GEMM_K + (k0 + local_k)</code>。</p>
+<ul>
+<li>相邻线程的 <code>local_k</code> 相差 1，因此访问全局内存时相邻线程访问相邻列 → <strong>完美合并访问</strong>。</li>
+</ul>
+</li>
+</ul>
+<h5 id="Stage-2：协作加载-B-Tile-到共享内存">Stage 2：协作加载 B Tile 到共享内存</h5>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> index = tid; index &lt; WMMA_K * BLOCK_N; index += BLOCK_THREADS) &#123;<br>    <span class="hljs-type">int</span> local_k = index / BLOCK_N;<br>    <span class="hljs-type">int</span> local_col = index % BLOCK_N;<br><br>    shared_B[index] = B[(k0 + local_k) * GEMM_N + (block_col + local_col)];<br>&#125;<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p>覆盖 <code>16 × 64 = 1024</code> 个元素。</p>
+</li>
+<li>
+<p><strong><code>local_k = index / 64</code></strong>：K 维度索引（0-15）。</p>
+</li>
+<li>
+<p><strong><code>local_col = index % 64</code></strong>：列索引（0-63）。</p>
+</li>
+<li>
+<p><strong>全局内存地址</strong>：<code>(k0 + local_k) * GEMM_N + (block_col + local_col)</code>。</p>
+<ul>
+<li>相邻线程的 <code>local_col</code> 相差 1 → <strong>也是合并访问</strong>。</li>
+</ul>
+</li>
+</ul>
+<h5 id="Stage-3：线程屏障-——-确保数据就绪">Stage 3：线程屏障 —— 确保数据就绪</h5>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp">__syncthreads();<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p>所有 256 个线程必须全部完成共享内存的写入后，任何 warp 才能开始读取。</p>
+</li>
+<li>
+<p>如果没有这个屏障，某个 warp 可能读到其他 warp 尚未写入完成的脏数据。</p>
+</li>
+</ul>
+<h5 id="Stage-4：Warp-从共享内存加载-Fragment-并计算">Stage 4：Warp 从共享内存加载 Fragment 并计算</h5>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-type">const</span> __half *a_tile_ptr = shared_A + warp_row * WMMA_K;<br>wmma::<span class="hljs-built_in">load_matrix_sync</span>(a_frag, a_tile_ptr, WMMA_K);<br><br><span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> n = <span class="hljs-number">0</span>; n &lt; C_TILES_PER_WARP; ++n) &#123;<br>    <span class="hljs-type">const</span> __half *b_tile_ptr = shared_B + warp_col + n * WMMA_N;<br>    wmma::<span class="hljs-built_in">load_matrix_sync</span>(b_frag[n], b_tile_ptr, BLOCK_N);<br>    wmma::<span class="hljs-built_in">mma_sync</span>(c_frag[n], a_frag, b_frag[n], c_frag[n]);<br>&#125;<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p><strong>A tile 指针</strong>：<code>shared_A + warp_row * WMMA_K</code>，定位到当前 warp 所需的 16 行在共享内存中的起始位置。</p>
+<ul>
+<li>
+<p>例如，<code>warp_m = 2</code> 时，<code>warp_row = 32</code>，读取 <code>shared_A[32 * 16]</code> 开始的 16 行。</p>
+</li>
+<li>
+<p><strong>重要观察</strong>：虽然 <code>load_matrix_sync</code> 的 <code>ldm</code> 参数为 <code>WMMA_K = 16</code>（远小于朴素版本的 4096），但这只是共享内存内部的 stride，不存在全局内存未被合并的问题。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>B tile 指针</strong>：<code>shared_B + warp_col + n * WMMA_N</code>，定位到当前 warp 所需的列范围（0-31 或 32-63）。</p>
+<ul>
+<li>
+<p><code>n = 0</code>：<code>b_tile_ptr = shared_B + warp_col</code>（列偏移 0-31）。</p>
+</li>
+<li>
+<p><code>n = 1</code>：<code>b_tile_ptr = shared_B + warp_col + 16</code>（列偏移 16-47，即 32-63）。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong><code>ldm = BLOCK_N = 64</code></strong>：B 矩阵在共享内存中每行有 64 个元素，leading dimension 为 64。</p>
+</li>
+<li>
+<p><strong><code>mma_sync</code></strong>：两个 WMMA tile 共享同一个 <code>a_frag</code>，分别用不同的 <code>b_frag[n]</code> 计算，结果累加到对应的 <code>c_frag[n]</code>。</p>
+</li>
+</ul>
+<h5 id="Stage-5：线程屏障-——-防止数据覆写">Stage 5：线程屏障 —— 防止数据覆写</h5>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp">__syncthreads();<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p>在所有 warp 完成对当前 K 阶段共享内存的读取之前，不允许任何线程写入下一轮的数据。</p>
+</li>
+<li>
+<p>这个屏障保证了 <code>shared_A</code> 和 <code>shared_B</code> 中的数据的<strong>正确生命周期</strong>。</p>
+</li>
+</ul>
+<h4 id="6-存储结果-2">6. 存储结果</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-type">int</span> output_row = block_row + warp_row;<br><span class="hljs-type">int</span> output_col = block_col + warp_col;<br><br><span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> n = <span class="hljs-number">0</span>; n &lt; C_TILES_PER_WARP; ++n) &#123;<br>    <span class="hljs-type">float</span> *c_tile_ptr = C + output_row * GEMM_N + output_col + n * WMMA_N;<br>    wmma::<span class="hljs-built_in">store_matrix_sync</span>(c_tile_ptr, c_frag[n], GEMM_N, wmma::mem_row_major);<br>&#125;<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p>将两个累加器 fragment 分别写回全局内存。</p>
+</li>
+<li>
+<p>输出位置：当前 warp 负责的 <strong>16 × 32</strong> 区域中的第 <code>n</code> 个 <strong>16 × 16</strong> tile。</p>
+</li>
+<li>
+<p><code>ldm = GEMM_N = 4096</code>，这是输出矩阵 C 的 leading dimension。</p>
+</li>
+</ul>
+<h4 id="7-Grid-与-Block-配置-2">7. Grid 与 Block 配置</h4>
+<figure class="highlight cpp"><table><tr><td class="code"><pre><code class="hljs cpp"><span class="hljs-function">dim3 <span class="hljs-title">block</span><span class="hljs-params">(BLOCK_THREADS, <span class="hljs-number">1</span>, <span class="hljs-number">1</span>)</span></span>;                    <span class="hljs-comment">// 256 线程 / block</span><br><span class="hljs-function">dim3 <span class="hljs-title">grid</span><span class="hljs-params">(GEMM_N / BLOCK_N, GEMM_M / BLOCK_M, <span class="hljs-number">1</span>)</span></span>;   <span class="hljs-comment">// grid = (64, 64)</span><br><br>shared_wmma_kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;(d_A, d_B, d_C_wmma);<br></code></pre></td></tr></table></figure>
+<ul>
+<li>
+<p><strong>每个 block = 256 线程 = 8 个 Warp</strong>，负责输出 <strong>64 × 64</strong> 的矩阵块。</p>
+</li>
+<li>
+<p><strong>Grid 尺寸 = 64 × 64 = 4096 个 block</strong>，覆盖整个 <strong>4096 × 4096</strong> 输出矩阵。</p>
+</li>
+<li>
+<p>与朴素版本的 65536 个 block 相比，block 数量减少了 <strong>16 倍</strong>，每个 block 的线程数增加了 <strong>8 倍</strong>。</p>
+</li>
+</ul>
+<h3 id="共享内存版本的优势">共享内存版本的优势</h3>
+<table>
+<thead>
+<tr>
+<th>对比维度</th>
+<th>朴素版本</th>
+<th>共享内存版本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>每个 block 线程数</td>
+<td>32（1 warp）</td>
+<td>256（8 warps）</td>
+</tr>
+<tr>
+<td>每个 block 输出大小</td>
+<td>16 × 16</td>
+<td>64 × 64</td>
+</tr>
+<tr>
+<td>全局内存访问</td>
+<td>每次 K 迭代 2 次/warp</td>
+<td>每次 K 迭代 2 次/block（复用 8 倍）</td>
+</tr>
+<tr>
+<td>全局内存合并</td>
+<td>❌ 跨步访问（stride = 4096）</td>
+<td>✅ 连续访问（coalesced）</td>
+</tr>
+<tr>
+<td>数据复用</td>
+<td>❌ 无</td>
+<td>✅ block 内 warp 间共享</td>
+</tr>
+<tr>
+<td>共享内存占用</td>
+<td>0</td>
+<td>64×16 + 16×64 = 2048 half ≈ 4 KB</td>
+</tr>
+</tbody>
+</table>
+<p>朴素实现的 grid 包含 65536 个线程块，每块 256 个线程，每个线程分别从 A 和 B 各读取一次全局内存，所以总访问量为 <code>65536 × 256 × 2 = 33,554,432</code>。 通过共享内存引入，访问量降低到 <code>4096 × 256 × 2 = 2,097,152</code> 次，减少了 <strong>16 倍</strong>。同时，合并访问模式使得每个内存事务都能充分利用 128 字节的缓存行，进一步提升了有效带宽。</p>
+
+    </div>
+
+    
+        <aside class="toc-sidebar">
+  <div class="toc-wrapper">
+    <h3 class="toc-title">Contents</h3>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#WMMA-API%E8%A7%A3%E9%87%8A"><span class="toc-text">WMMA API解释</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-fragment"><span class="toc-text">(1)fragment</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-load-matrix-sync"><span class="toc-text">(2)load_matrix_sync</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-store-matrix-sync"><span class="toc-text">(3)store_matrix_sync</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-fill-fragment"><span class="toc-text">(4)fill_fragment</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-mma-sync"><span class="toc-text">(5)mma_sync</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%B4%E7%B4%A0WMMA%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95"><span class="toc-text">朴素WMMA矩阵乘法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E9%80%90%E6%AE%B5%E8%A7%A3%E6%9E%90"><span class="toc-text">代码逐段解析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%B4%E7%B4%A0%E5%AE%9E%E7%8E%B0%E7%9A%84%E5%B1%80%E9%99%90%E6%80%A7"><span class="toc-text">朴素实现的局限性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#WMMA%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98"><span class="toc-text">WMMA共享内存</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E9%80%90%E6%AE%B5%E8%A7%A3%E6%9E%90-2"><span class="toc-text">代码逐段解析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98%E7%89%88%E6%9C%AC%E7%9A%84%E4%BC%98%E5%8A%BF"><span class="toc-text">共享内存版本的优势</span></a></li></ol></li></ol>
+  </div>
+</aside>
+
+      
+  </div>
+
+  
+    <div id="waline"></div>
+<script type="module">
+  import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+
+  init({
+    el: '#waline',
+    serverURL: 'example.durobert.top',
+    dark: 'html[data-theme="dark"]'
+  });
+</script>
+  
+
+  
+
+  <footer class="post-footer">
+    
+      <div class="post-tags">
+        
+          <a href="/tags/CUDA/">#CUDA</a>
+        
+          <a href="/tags/%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95/">#矩阵乘法</a>
+        
+          <a href="/tags/WMMA/">#WMMA</a>
+        
+      </div>
+    
+    <nav class="post-nav">
+      
+      
+        <a class="next" href="/2026/07/11/CUDA%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96-4-%EF%BC%9A%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95/">CUDA算子优化(4)：矩阵乘法 &raquo;</a>
+      
+    </nav>
+  </footer>
+
+  
+    
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true
+    },
+    options: {
+      // Skip the TOC sidebar and nav so heading math copied into the TOC
+      // isn't typeset a second time.
+      ignoreHtmlClass: 'toc-sidebar|site-nav',
+      enableMenu: false
+    }
+  };
+</script>
+
+<script defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4.1.2/tex-mml-chtml.js"
+        integrity="sha384-Nfw2UPOp2WaWfAjGXccSL8qKx4KWXN9NUonXtPcotBXKSqHMyNWrahYzDzIXhpTy"
+        crossorigin="anonymous"></script>
+
+  
+</article>
+
+    </main>
+    <footer class="site-footer">
+  <div class="footer-inner">
+    
+      <p>鄂ICP备2023018829号</p>
+    
+    <p>Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &middot; Theme <a href="https://github.com/finch-xu/hexo-theme-warmpaper" target="_blank" rel="noopener">Warmpaper</a></p>
+  </div>
+</footer>
+
+  </div>
+  
+<script src="/js/main.js"></script>
+
+</body>
+</html>
