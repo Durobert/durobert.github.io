@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <title>Transformer算法 | Durobert</title>
+  <meta name="description" content="Transformer由Google的研究团队提出；论文发表于2017年。主要致力于在序列建模中提升并行性与长距离依赖建模能力，摆脱对循环卷积的依赖。Transformer的主要工作如下：  结构：利用编码器与解码器的结构 三种注意力：编码器多头自注意力、交叉注意力、解码器多头自注意力（含因果掩码） 位置信息：用位置编码赋予词向量序列信息 残差连接+层归一化+前馈网络(FFN)：形成标准层块，稳定">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Transformer算法">
+<meta property="og:url" content="http://example.com/2026/07/18/Transformer%E7%AE%97%E6%B3%95/index.html">
+<meta property="og:site_name" content="Durobert">
+<meta property="og:description" content="Transformer由Google的研究团队提出；论文发表于2017年。主要致力于在序列建模中提升并行性与长距离依赖建模能力，摆脱对循环卷积的依赖。Transformer的主要工作如下：  结构：利用编码器与解码器的结构 三种注意力：编码器多头自注意力、交叉注意力、解码器多头自注意力（含因果掩码） 位置信息：用位置编码赋予词向量序列信息 残差连接+层归一化+前馈网络(FFN)：形成标准层块，稳定">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784293673889.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784296076665.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784298203425.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784299504615.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784300250814.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784300992827.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784330640553.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784332051599.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784332778301.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784332989465.png">
+<meta property="og:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784334134714.png">
+<meta property="article:published_time" content="2026-07-18T00:24:25.000Z">
+<meta property="article:modified_time" content="2026-07-18T00:26:10.203Z">
+<meta property="article:author" content="Durobert">
+<meta property="article:tag" content="Transformer">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://tuchuang.durobert.top/Picgo/pasted-image-1784293673889.png">
+  <link rel="icon" href="/images/logo.svg">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-regular/result.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-medium/result.css">
+
+  
+    
+<link rel="stylesheet" href="/css/waline.css">
+
+  
+  
+  
+    
+<link rel="stylesheet" href="/css/math.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('warmpaper-theme');
+        if (saved === 'dark' || saved === 'light') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (e) {}
+    })();
+  </script>
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+<body>
+  <div class="site-wrapper">
+    <header class="site-header">
+  <div class="header-inner">
+    <a class="site-title" href="/"><img class="site-logo" src="/images/logo.svg" alt="Logo">Durobert</a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+      <span class="nav-toggle-icon"></span>
+    </button>
+    <nav class="site-nav">
+      
+        <a class="nav-link" href="/">Home</a>
+      
+        <a class="nav-link" href="/archives">Archives</a>
+      
+        <a class="nav-link" href="/tags">Tags</a>
+      
+        <a class="nav-link" href="/categories">Categories</a>
+      
+        <a class="nav-link" href="/about">About</a>
+      
+      <button class="theme-toggle" type="button" aria-label="切换主题" title="切换主题" data-theme-state="light">
+        <svg class="icon-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg class="icon-moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+    <main class="main-content">
+      <article class="post">
+  <header class="post-header">
+    <h1 class="post-title">Transformer算法</h1>
+    <div class="post-meta">
+      <time datetime="2026-07-18T00:24:25.000Z">2026-07-18</time>
+      
+        <span class="separator">&middot;</span>
+        
+          <a href="/categories/Transformer/">Transformer</a>
+        
+      
+    </div>
+  </header>
+
+  <div class="post-body-wrapper">
+    <div class="post-content">
+      <p>Transformer由Google的研究团队提出；论文发表于2017年。主要致力于在<strong>序列建模</strong>中提升<strong>并行性与长距离依赖建模能力</strong>，摆脱对循环卷积的依赖。Transformer的主要工作如下：</p>
+<ol>
+<li><strong>结构</strong>：利用编码器与解码器的结构</li>
+<li><strong>三种注意力</strong>：编码器多头自注意力、交叉注意力、解码器多头自注意力（含因果掩码）</li>
+<li><strong>位置信息</strong>：用<strong>位置编码赋予</strong>词向量序列信息</li>
+<li><strong>残差连接+层归一化+前馈网络(FFN)</strong>：形成标准层块，稳定深层训练</li>
+</ol>
+<h2 id="Transformer整体架构">Transformer整体架构</h2>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784293673889.png" alt="image"></p>
+<p>Transformer由Encoder(编码器)和Decoder(解码器)组成。首先，我们要将自然语言Inputs转换成词向量，使用位置编码表示时间关系，将词向量和位置编码相加输入编码器提取信息；Outputs shifted right为Outputs的偏移，第一次输入为起始符，与位置编码相加，输入解码器，再依次偏移输出字符。</p>
+<h3 id="编码器-Encoder">编码器(Encoder)</h3>
+<p>编码器每层包含两个子层：</p>
+<ol>
+<li>
+<p><strong>多头自注意力机制(Multi-Head Attention)</strong></p>
+<ul>
+<li>
+<p>并行计算多个注意力头，捕捉不同位置的特征关系</p>
+</li>
+<li>
+<p>输入：Q(Query)、K(Key)、V(Value)均来自同一输入序列</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>前馈神经网络(Feed-Forward Network)</strong></p>
+<ul>
+<li>两层全连接网络，对每个位置独立处理</li>
+</ul>
+</li>
+</ol>
+<p>每个子层后都有<strong>残差连接+层归一化(Add &amp; Norm)</strong></p>
+<h3 id="解码器-Decoder">解码器(Decoder)</h3>
+<p>解码器每层包含三个子层：</p>
+<ol>
+<li>
+<p><strong>掩码多头自注意力(Masked Multi-Head Attention)</strong></p>
+<ul>
+<li>防止当前位置“看到”未来位置的信息（用于自回归生成）</li>
+</ul>
+</li>
+<li>
+<p><strong>多头交叉注意力机制(Multi-Head Attention)</strong></p>
+<ul>
+<li>
+<p>Q来自解码器上一层，K/V来自Encoder输出</p>
+</li>
+<li>
+<p>实现“关注输入序列相关部分”的能力</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>前馈神经网络</strong></p>
+</li>
+</ol>
+<p>每个子层后都有<strong>残差连接+层归一化(Add &amp; Norm)</strong></p>
+<h2 id="输入文本数据数值转换">输入文本数据数值转换</h2>
+<p>在Transformer中，所有计算都基于数值，因此文本进入模型前必须被转换为数字表示，输出后再将数字映射回文字。这一转换的核心是<strong>词嵌入（Word Embedding）</strong>：它将每个单词或子词映射为一个固定维度的稠密向量，使语义相近的词在向量空间中距离更近。如图所示，词嵌入矩阵就像一本“字典”，将“独热向量”乘以“词嵌入矩阵”，本质上就是查表，得到“篮球”和“鸡”的词嵌入向量。</p>
+<blockquote>
+<p>注释：词嵌入矩阵是经训练得到的权重表，将词ID映射成向量；语义相近聚类、差异分散，便于在向量空间做相似度计算。至于词嵌入的方法，这里不做讨论。</p>
+</blockquote>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784296076665.png" alt="image"></p>
+<h2 id="位置编码">位置编码</h2>
+<p>位置编码是通过不同频率的正弦和余弦函数生成的。对于词嵌入向量中的每一个维度，计算规则如下：</p>
+<ul>
+<li>
+<p><strong>偶数维度(2i)</strong>：使用正弦函数sin</p>
+</li>
+<li>
+<p>$$ PE(pos, 2i) = \sin\left( \frac{pos}{10000^{\frac{2i}{d}}} \right) $$</p>
+</li>
+<li>
+<p><strong>奇数维度(2i+1)</strong>：使用余弦函数cos</p>
+<p>$$ PE(pos, 2i + 1) = \cos \left( \frac{pos}{10000^{\frac{2i}{d}}} \right) $$</p>
+</li>
+</ul>
+<p>其中pos代表当前词在序列中的位置索引，i代表维度的索引，d则是词嵌入向量的总维度大小。</p>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784298203425.png" alt="image"></p>
+<h2 id="自注意力机制">自注意力机制</h2>
+<p>自注意力机制在做什么，主要分为三步：</p>
+<ol>
+<li>计算X中不同token之间的关联程度</li>
+<li>通过关联程度提取X的有用信息</li>
+<li>输出包含不同注意力分配的信息</li>
+</ol>
+<p><strong>输入与投影</strong></p>
+<ul>
+<li>
+<p><strong>输入向量a</strong>，底部的绿色方块$a^1, a^2, a^3, a^4$代表输入序列中每个词的嵌入向量（通常已经加上了位置编码）。</p>
+</li>
+<li>
+<p><strong>生成 Query 和 Key</strong></p>
+<ul>
+<li>
+<p><strong>Query ( q )</strong>：对于我们要关注的当前词（这里是第1个词），通过权重矩阵$W^q$将其转换为查询向量$q^1$，公式为：$q^1=W^qa^1$</p>
+</li>
+<li>
+<p><strong>Key ( k )</strong>：对于序列中的每一个词（包括当前词自己），通过权重矩阵$W^k$将其转换为查询向量$j^1$，公式为：$k^1=W^ka^1$</p>
+</li>
+</ul>
+</li>
+</ul>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784299504615.png" alt="image"></p>
+<p><strong>点积计算</strong></p>
+<ul>
+<li>
+<p>这是注意力的核心部分。为了知道第1个词应该“关注”其他词多少，我们需要计算它的查询向量 $q^1$ 与其他所有词的键向量 $k$ 之间的相似度。</p>
+</li>
+<li>
+<p><strong>计算公式</strong>：$\alpha = q \cdot k$</p>
+</li>
+<li>
+<p><strong>具体操作</strong>：</p>
+<ul>
+<li>
+<p>$\alpha_{1,1} = q^1 \cdot k^1$ （词1对自己的关注度）</p>
+</li>
+<li>
+<p>$\alpha_{1,2} = q^1 \cdot k^2$ （词1对词2的关注度）</p>
+</li>
+<li>
+<p>$\alpha_{1,3} = q^1 \cdot k^3$ （词1对词3的关注度）</p>
+</li>
+<li>
+<p>$\alpha_{1,4} = q^1 \cdot k^4$ （词1对词4的关注度）</p>
+</li>
+</ul>
+</li>
+<li>
+<p>图中的黄色方块 $\alpha_{1,1}$ 到 $\alpha_{1,4}$ 就是这些原始的相关性分数。</p>
+</li>
+</ul>
+<p><strong>Softmax 归一化</strong></p>
+<ul>
+<li>
+<p>原始的分数 $\alpha$ 可能是任意实数，为了将其转化为概率分布（即注意力权重），需要通过 Softmax 层。</p>
+</li>
+<li>
+<p><strong>作用</strong>：将这一组分数转化为总和为 1 的数值。数值越大，表示模型在处理第1个词时，越应该“注意”那个位置的词。</p>
+</li>
+<li>
+<p><strong>输出</strong>：顶部的灰色方块 $\alpha’<em>{1,1}$ 到 $\alpha’</em>{1,4}$ 就是最终的注意力权重。</p>
+</li>
+</ul>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784300250814.png" alt="image"></p>
+<p>上图展示了 Transformer 模型中**自注意力机制（Self-Attention）**的最后一步：<strong>加权求和生成输出向量</strong>。</p>
+<p>在此之前，我们已经计算出了每个词对其他词的“注意力权重”（即 $\alpha’$），现在需要利用这些权重来整合信息。</p>
+<p><strong>核心概念</strong></p>
+<p>图中的绿色方块 $b^1$ 和 $b^2$ 代表最终输出的上下文向量（Context Vectors）。</p>
+<ul>
+<li>
+<p><strong>$b^1$</strong>：是第1个词在考虑了句子中所有其他词的信息后，生成的新的表示向量。</p>
+</li>
+<li>
+<p><strong>$b^2$</strong>：是第2个词在考虑了句子中所有其他词的信息后，生成的新的表示向量。</p>
+</li>
+</ul>
+<p><strong>左侧部分：$b^1$ 的计算过程</strong></p>
+<p>这部分演示了如何计算序列中<strong>第一个词</strong>的输出向量 $b^1$。</p>
+<ul>
+<li>
+<p><strong>输入</strong>：</p>
+<ul>
+<li>
+<p><strong>注意力权重 ($\alpha’_{1,i}$)</strong>：来自前一步 Softmax 层的输出（蓝色方块），表示第1个词对第 $i$ 个词的关注程度。</p>
+</li>
+<li>
+<p><strong>值向量 ($v^i$)</strong>：每个输入词 $a^i$ 通过权重矩阵 $W^v$ 转换得到的 Value 向量（深蓝色方块）。公式为 $v^i = W^v a^i$。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>操作</strong>：</p>
+<ul>
+<li>
+<p>将第1个词对所有词的注意力权重 $\alpha’_{1,i}$ 分别乘以对应的值向量 $v^i$。</p>
+</li>
+<li>
+<p>例如：$\alpha’<em>{1,1} \times v^1$，$\alpha’</em>{1,2} \times v^2$ 等。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>求和</strong>：</p>
+<ul>
+<li>
+<p>将所有乘积结果相加，得到最终的输出向量 $b^1$。</p>
+</li>
+<li>
+<p>公式：$b^1 = \sum_{i} \alpha’<em>{1,i} v^i = \alpha’</em>{1,1}v^1 + \alpha’<em>{1,2}v^2 + \alpha’</em>{1,3}v^3 + \alpha’_{1,4}v^4$</p>
+</li>
+</ul>
+</li>
+</ul>
+<p><strong>右侧部分：$b^2$ 的计算过程</strong></p>
+<p>这部分演示了如何计算序列中<strong>第二个词</strong>的输出向量 $b^2$。原理与左侧完全相同，只是查询的主体变成了第2个词。</p>
+<ul>
+<li>
+<p><strong>变化点</strong>：</p>
+<ul>
+<li>
+<p>使用的是第2个词的注意力权重 $\alpha’_{2,i}$（注意下标变成了2）。</p>
+</li>
+<li>
+<p>值向量 $v^i$ 保持不变（因为 Value 是基于原始输入生成的，不随查询对象改变）。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>操作</strong>：</p>
+<ul>
+<li>将第2个词对所有词的注意力权重 $\alpha’_{2,i}$ 分别乘以对应的值向量 $v^i$。</li>
+</ul>
+</li>
+<li>
+<p><strong>求和</strong>：</p>
+<ul>
+<li>公式：$b^2 = \sum_{i} \alpha’<em>{2,i} v^i = \alpha’</em>{2,1}v^1 + \alpha’<em>{2,2}v^2 + \alpha’</em>{2,3}v^3 + \alpha’_{2,4}v^4$</li>
+</ul>
+</li>
+</ul>
+<p>步骤展示了如何利用计算好的注意力权重，对 Value 向量进行加权求和，从而生成包含上下文信息的输出向量。</p>
+<p>这就是自注意机制的计算过程，总结为如下公式：</p>
+<p>$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$</p>
+<h2 id="多头注意力机制">多头注意力机制</h2>
+<p>下图为自注意力机制的矩阵理解方式，正如图所描述的参数含义，A为最后算出的注意力矩阵。</p>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784300992827.png" alt="image"></p>
+<p>多头注意力机制是Transformer的核心组件，简单来说，它并不是只算一次注意力，而是把输入拆成多份，并行地做多次“自注意力”计算，最后再把结果拼接起来。具体流程是：</p>
+<ol>
+<li>输入先被拆成h个头，每个头独立计算Q，K，V</li>
+<li>每个头分别做缩放点积注意力</li>
+<li>所有头的输出拼接起来，再经过一个线性变换得到最终结果</li>
+</ol>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784330640553.png" alt="image"></p>
+<figure class="highlight python"><table><tr><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> torch<br><span class="hljs-keyword">import</span> torch.nn <span class="hljs-keyword">as</span> nn<br><span class="hljs-keyword">import</span> math<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">MultiHeadAttention</span>(nn.Module):<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, d_model, num_heads</span>):<br>        <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">        :param d_model: 模型总维度 (例如 512)</span><br><span class="hljs-string">        :param num_heads: 头的数量 (例如 8)</span><br><span class="hljs-string">        &quot;&quot;&quot;</span><br>        <span class="hljs-built_in">super</span>(MultiHeadAttention, <span class="hljs-variable language_">self</span>).__init__()<br>        <span class="hljs-keyword">assert</span> d_model % num_heads == <span class="hljs-number">0</span>, <span class="hljs-string">&quot;d_model must be divisible by num_heads&quot;</span><br>        <br>        <span class="hljs-variable language_">self</span>.d_model = d_model<br>        <span class="hljs-variable language_">self</span>.num_heads = num_heads<br>        <span class="hljs-variable language_">self</span>.d_k = d_model // num_heads  <span class="hljs-comment"># 每个头的维度 (d_k)</span><br>        <br>        <span class="hljs-comment"># 定义 W^q, W^k, W^v 线性层</span><br>        <span class="hljs-comment"># 这里我们直接生成一个大矩阵，后面通过 reshape 拆分</span><br>        <span class="hljs-variable language_">self</span>.W_q = nn.Linear(d_model, d_model)<br>        <span class="hljs-variable language_">self</span>.W_k = nn.Linear(d_model, d_model)<br>        <span class="hljs-variable language_">self</span>.W_v = nn.Linear(d_model, d_model)<br>        <br>        <span class="hljs-comment"># 最后的输出线性变换 W^o</span><br>        <span class="hljs-variable language_">self</span>.W_o = nn.Linear(d_model, d_model)<br>        <br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">scaled_dot_product_attention</span>(<span class="hljs-params">self, Q, K, V, mask=<span class="hljs-literal">None</span></span>):<br>        <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">        核心公式: softmax(QK^T / sqrt(d_k))V</span><br><span class="hljs-string">        &quot;&quot;&quot;</span><br>        scores = torch.matmul(Q, K.transpose(-<span class="hljs-number">2</span>, -<span class="hljs-number">1</span>)) / math.sqrt(<span class="hljs-variable language_">self</span>.d_k)<br>        <br>        <span class="hljs-keyword">if</span> mask <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">None</span>:<br>            scores = scores.masked_fill(mask == <span class="hljs-number">0</span>, <span class="hljs-built_in">float</span>(<span class="hljs-string">&#x27;-inf&#x27;</span>))<br>            <br>        attn_weights = torch.softmax(scores, dim=-<span class="hljs-number">1</span>)<br>        output = torch.matmul(attn_weights, V)<br>        <span class="hljs-keyword">return</span> output, attn_weights<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, X</span>):<br>        batch_size, seq_len, _ = X.size()<br>        <br>        <span class="hljs-comment"># 1. 线性投影并拆分多头</span><br>        <span class="hljs-comment"># [batch, seq_len, d_model] -&gt; [batch, seq_len, num_heads, d_k] -&gt; [batch, num_heads, seq_len, d_k]</span><br>        Q = <span class="hljs-variable language_">self</span>.W_q(X).view(batch_size, seq_len, <span class="hljs-variable language_">self</span>.num_heads, <span class="hljs-variable language_">self</span>.d_k).transpose(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>)<br>        K = <span class="hljs-variable language_">self</span>.W_k(X).view(batch_size, seq_len, <span class="hljs-variable language_">self</span>.num_heads, <span class="hljs-variable language_">self</span>.d_k).transpose(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>)<br>        V = <span class="hljs-variable language_">self</span>.W_v(X).view(batch_size, seq_len, <span class="hljs-variable language_">self</span>.num_heads, <span class="hljs-variable language_">self</span>.d_k).transpose(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>)<br>        <br>        <span class="hljs-comment"># 2. 并行计算注意力 (所有头同时计算)</span><br>        <span class="hljs-comment"># output shape: [batch, num_heads, seq_len, d_k]</span><br>        attn_output, weights = <span class="hljs-variable language_">self</span>.scaled_dot_product_attention(Q, K, V)<br>        <br>        <span class="hljs-comment"># 3. 拼接多头结果</span><br>        <span class="hljs-comment"># [batch, num_heads, seq_len, d_k] -&gt; [batch, seq_len, num_heads, d_k] -&gt; [batch, seq_len, d_model]</span><br>        concat_attn = attn_output.transpose(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>).contiguous().view(batch_size, seq_len, <span class="hljs-variable language_">self</span>.d_model)<br>        <br>        <span class="hljs-comment"># 4. 最终线性变换</span><br>        output = <span class="hljs-variable language_">self</span>.W_o(concat_attn)<br>        <br>        <span class="hljs-keyword">return</span> output, weights<br></code></pre></td></tr></table></figure>
+<h2 id="层归一化">层归一化</h2>
+<p>层归一化是在特征维度（即 <code>d_model</code>）上对每个样本的激活值进行标准化，使其均值为 0、方差为 1，然后通过可学习的缩放和平移参数恢复模型的表达能力。<br>在 Transformer 等深层架构中，层归一化能稳定训练过程，避免内部协变量偏移，加速收敛，并允许使用更大的学习率。它拼接在多头注意力和前馈网络之后，通过对残差连接前的输出进行归一化，保证梯度流动顺畅，防止梯度消失或爆炸。</p>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784332051599.png" alt="image"></p>
+<p><strong>归一化对象</strong>：每个样本的每一层（特征维度）进行归一化</p>
+<p><strong>计算方式</strong>：对单个样本的每一层的所有神经元进行归一化</p>
+<p>$$\text{LayerNorm}(x) = \frac{x - \mu}{\sigma} \cdot \gamma + \beta$$</p>
+<p>$\mu$和$\sigma$是当前样本的均值和方差，$\gamma$和$\beta$是学习的缩放因子和偏置</p>
+<h2 id="前馈神经网络">前馈神经网络</h2>
+<p>前馈神经网络是一种<strong>无循环的多层神经网络</strong>，信息从输入到输出<strong>单向流动</strong>。前馈神经网络是一种<strong>结构类型</strong>而不是<strong>特定网络</strong>。</p>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784332778301.png" alt="image"></p>
+<h2 id="Transformer的推理过程">Transformer的推理过程</h2>
+<p>这张图展示了 Transformer 模型在机器翻译任务中的完整推理流程，以将中文句子&quot;我是一条狗&quot;翻译成英文&quot;I am a dog&quot;为例。整个过程始于左侧的编码器，得到编码信息，编码信息随后作为关键输入传递给右侧的解码器，解码过程采用<strong>自回归模式</strong>，从起始标记开始逐步生成目标语言序列。在每一步生成过程中，解码器首先利用掩码自注意力机制处理已生成的部分译文（如当前已生成&quot;I&quot;），确保预测下一个词时只能看到历史信息而不能窥探未来；接着通过交叉注意力机制，将解码器的中间状态与编码器输出的&quot;编码信息&quot;进行对齐和融合，从而让模型在生成每个英文单词时都能关注到源句子中最相关的中文词汇；最后经过线性层和 Softmax 归一化得到词表上的概率分布，选出概率最高的词作为当前步的输出（如依次预测出&quot;I&quot;、“am”、“a”、“dog”）。这一过程不断循环迭代，直到模型预测出结束标记为止，此时完整的翻译结果&quot;I am a dog&quot;便生成完毕。</p>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784332989465.png" alt="image"></p>
+<h2 id="总结">总结</h2>
+<h3 id="一、整体架构">一、整体架构</h3>
+<p>Transformer 采用 <strong>Encoder-Decoder</strong> 结构，两者各由 6 层相同模块堆叠而成：</p>
+<ul>
+<li>
+<p><strong>Encoder</strong>：负责将输入序列编码为富含上下文的向量表示</p>
+</li>
+<li>
+<p><strong>Decoder</strong>：负责自回归地逐词生成输出序列</p>
+</li>
+</ul>
+<p><img src="https://tuchuang.durobert.top/Picgo/pasted-image-1784334134714.png" alt="image" title="image"></p>
+<h3 id="二、核心组件一览">二、核心组件一览</h3>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>核心作用</th>
+<th>关键细节</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>词嵌入（Embedding）</strong></td>
+<td>将离散词映射为稠密向量</td>
+<td>语义相近的词在向量空间中距离更近</td>
+</tr>
+<tr>
+<td><strong>位置编码（Positional Encoding）</strong></td>
+<td>注入位置/顺序信息</td>
+<td>使用不同频率的 sin/cos 函数，弥补注意力无顺序感知的缺陷</td>
+</tr>
+<tr>
+<td><strong>多头自注意力（Multi-Head Self-Attention）</strong></td>
+<td>捕捉序列内部任意两个位置之间的依赖</td>
+<td>Q/K/V 来自同一输入；并行多个&quot;头&quot;从不同子空间学习</td>
+</tr>
+<tr>
+<td><strong>掩码自注意力（Masked Self-Attention）</strong></td>
+<td>Decoder 中防止看到未来信息</td>
+<td>保证自回归生成的因果性</td>
+</tr>
+<tr>
+<td><strong>交叉注意力（Cross-Attention）</strong></td>
+<td>连接 Encoder 与 Decoder</td>
+<td>Q 来自 Decoder，K/V 来自 Encoder 输出</td>
+</tr>
+<tr>
+<td><strong>前馈神经网络（FFN）</strong></td>
+<td>对每个位置做非线性变换</td>
+<td>两层全连接，ReLU 激活</td>
+</tr>
+<tr>
+<td><strong>层归一化 + 残差连接（Add &amp; Norm）</strong></td>
+<td>稳定深层训练</td>
+<td>每个子层后均添加，缓解梯度消失/爆炸</td>
+</tr>
+</tbody>
+</table>
+<h3 id="三、核心公式">三、核心公式</h3>
+<p><strong>自注意力（缩放点积注意力）：</strong></p>
+<p>$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$</p>
+<p>其中 $\sqrt{d_k}$ 为缩放因子，防止点积值过大导致 softmax 梯度消失。</p>
+<h3 id="四、数据流">四、数据流</h3>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><code class="hljs plaintext">输入 → 词嵌入 + 位置编码 → [多头自注意力 → Add&amp;Norm → FFN → Add&amp;Norm] × 6 (Encoder)<br>                                       ↓<br>输出 ← Softmax ← 线性层 ← [掩码自注意力 → 交叉注意力 → FFN] × 6 (Decoder)<br></code></pre></td></tr></table></figure>
+
+    </div>
+
+    
+        <aside class="toc-sidebar">
+  <div class="toc-wrapper">
+    <h3 class="toc-title">Contents</h3>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Transformer%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">Transformer整体架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E7%A0%81%E5%99%A8-Encoder"><span class="toc-text">编码器(Encoder)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E7%A0%81%E5%99%A8-Decoder"><span class="toc-text">解码器(Decoder)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BE%93%E5%85%A5%E6%96%87%E6%9C%AC%E6%95%B0%E6%8D%AE%E6%95%B0%E5%80%BC%E8%BD%AC%E6%8D%A2"><span class="toc-text">输入文本数据数值转换</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%8D%E7%BD%AE%E7%BC%96%E7%A0%81"><span class="toc-text">位置编码</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%9C%BA%E5%88%B6"><span class="toc-text">自注意力机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E5%A4%B4%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%9C%BA%E5%88%B6"><span class="toc-text">多头注意力机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B1%82%E5%BD%92%E4%B8%80%E5%8C%96"><span class="toc-text">层归一化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E9%A6%88%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C"><span class="toc-text">前馈神经网络</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Transformer%E7%9A%84%E6%8E%A8%E7%90%86%E8%BF%87%E7%A8%8B"><span class="toc-text">Transformer的推理过程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">一、整体架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6%E4%B8%80%E8%A7%88"><span class="toc-text">二、核心组件一览</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%A0%B8%E5%BF%83%E5%85%AC%E5%BC%8F"><span class="toc-text">三、核心公式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="toc-text">四、数据流</span></a></li></ol></li></ol>
+  </div>
+</aside>
+
+      
+  </div>
+
+  
+    <div id="waline"></div>
+<script type="module">
+  import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+
+  init({
+    el: '#waline',
+    serverURL: 'example.durobert.top',
+    dark: 'html[data-theme="dark"]'
+  });
+</script>
+  
+
+  
+
+  <footer class="post-footer">
+    
+      <div class="post-tags">
+        
+          <a href="/tags/Transformer/">#Transformer</a>
+        
+      </div>
+    
+    <nav class="post-nav">
+      
+      
+        <a class="next" href="/2026/07/17/%E8%BF%9E%E7%BB%AD%E6%89%B9%E5%A4%84%E7%90%86/">连续批处理 &raquo;</a>
+      
+    </nav>
+  </footer>
+
+  
+    
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true
+    },
+    options: {
+      // Skip the TOC sidebar and nav so heading math copied into the TOC
+      // isn't typeset a second time.
+      ignoreHtmlClass: 'toc-sidebar|site-nav',
+      enableMenu: false
+    }
+  };
+</script>
+
+<script defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4.1.2/tex-mml-chtml.js"
+        integrity="sha384-Nfw2UPOp2WaWfAjGXccSL8qKx4KWXN9NUonXtPcotBXKSqHMyNWrahYzDzIXhpTy"
+        crossorigin="anonymous"></script>
+
+  
+</article>
+
+    </main>
+    <footer class="site-footer">
+  <div class="footer-inner">
+    
+      <p>鄂ICP备2023018829号</p>
+    
+    <p>Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &middot; Theme <a href="https://github.com/finch-xu/hexo-theme-warmpaper" target="_blank" rel="noopener">Warmpaper</a></p>
+  </div>
+</footer>
+
+  </div>
+  
+<script src="/js/main.js"></script>
+
+</body>
+</html>
