@@ -23,6 +23,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-medium/result.css">
 
   
+    
+<link rel="stylesheet" href="/css/waline.css">
+
+  
   
   
     
@@ -54,6 +58,16 @@
       <span class="nav-toggle-icon"></span>
     </button>
     <nav class="site-nav">
+      
+        <a class="nav-link" href="/">Home</a>
+      
+        <a class="nav-link" href="/archives">Archives</a>
+      
+        <a class="nav-link" href="/tags">Tags</a>
+      
+        <a class="nav-link" href="/categories">Categories</a>
+      
+        <a class="nav-link" href="/about">About</a>
       
       <button class="theme-toggle" type="button" aria-label="切换主题" title="切换主题" data-theme-state="light">
         <svg class="icon-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -133,8 +147,27 @@ $$</p>
     </div>
 
     
+        <aside class="toc-sidebar">
+  <div class="toc-wrapper">
+    <h3 class="toc-title">Contents</h3>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E7%AE%80%E4%BB%8B"><span class="toc-text">1. 简介</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E7%AE%97%E5%AD%90CPU%E5%AE%9E%E7%8E%B0"><span class="toc-text">2. 算子CPU实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-CUDA%E7%89%88%E6%9C%ACV0%E4%B8%80%E4%B8%AA%E7%BA%BF%E7%A8%8B%E5%A4%84%E7%90%86%E4%B8%80%E8%A1%8C"><span class="toc-text">3. CUDA版本V0一个线程处理一行</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-CUDA%E7%89%88%E6%9C%ACV1%E4%B8%80%E4%B8%AAWarp%E5%A4%84%E7%90%86%E4%B8%80%E8%A1%8C"><span class="toc-text">4. CUDA版本V1一个Warp处理一行</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-CUDA%E7%89%88%E6%9C%ACV2%E4%B8%80%E4%B8%AABlock%E5%A4%84%E7%90%86%E4%B8%80%E8%A1%8C"><span class="toc-text">5. CUDA版本V2一个Block处理一行</span></a></li></ol>
+  </div>
+</aside>
+
+      
   </div>
 
+  
+    <div id="waline"></div>
+<script type="module">
+  import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+
+  init({
+    el: '#waline',
+    serverURL: 'example.durobert.top',
+    dark: 'html[data-theme="dark"]'
+  });
+</script>
   
 
   
@@ -189,7 +222,7 @@ $$</p>
     <footer class="site-footer">
   <div class="footer-inner">
     
-      <p>&copy; 2026 Durobert</p>
+      <p><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">鄂ICP备2023018829号</a></p>
     
     <p>Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &middot; Theme <a href="https://github.com/finch-xu/hexo-theme-warmpaper" target="_blank" rel="noopener">Warmpaper</a></p>
   </div>

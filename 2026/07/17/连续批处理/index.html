@@ -25,6 +25,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-gb-web@latest/lxgwwenkaigb-medium/result.css">
 
   
+    
+<link rel="stylesheet" href="/css/waline.css">
+
+  
   
   
     
@@ -56,6 +60,16 @@
       <span class="nav-toggle-icon"></span>
     </button>
     <nav class="site-nav">
+      
+        <a class="nav-link" href="/">Home</a>
+      
+        <a class="nav-link" href="/archives">Archives</a>
+      
+        <a class="nav-link" href="/tags">Tags</a>
+      
+        <a class="nav-link" href="/categories">Categories</a>
+      
+        <a class="nav-link" href="/about">About</a>
       
       <button class="theme-toggle" type="button" aria-label="切换主题" title="切换主题" data-theme-state="light">
         <svg class="icon-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -169,8 +183,27 @@
     </div>
 
     
+        <aside class="toc-sidebar">
+  <div class="toc-wrapper">
+    <h3 class="toc-title">Contents</h3>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%A0%E7%BB%9F%E9%9D%99%E6%80%81%E6%89%B9%E5%A4%84%E7%90%86%E7%9A%84%E4%B8%8D%E8%B6%B3"><span class="toc-text">传统静态批处理的不足</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%9E%E7%BB%AD%E6%89%B9%E5%A4%84%E7%90%86%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">连续批处理的工作原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8D%E5%90%8C%E6%89%B9%E5%A4%84%E7%90%86%E5%AF%B9%E6%AF%94"><span class="toc-text">不同批处理对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%9E%E7%BB%AD%E6%89%B9%E5%A4%84%E7%90%86%E7%9A%84%E8%B0%83%E5%BA%A6%E8%BF%87%E7%A8%8B"><span class="toc-text">连续批处理的调度过程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </div>
+</aside>
+
+      
   </div>
 
+  
+    <div id="waline"></div>
+<script type="module">
+  import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+
+  init({
+    el: '#waline',
+    serverURL: 'example.durobert.top',
+    dark: 'html[data-theme="dark"]'
+  });
+</script>
   
 
   
@@ -225,7 +258,7 @@
     <footer class="site-footer">
   <div class="footer-inner">
     
-      <p>&copy; 2026 Durobert</p>
+      <p><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">鄂ICP备2023018829号</a></p>
     
     <p>Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &middot; Theme <a href="https://github.com/finch-xu/hexo-theme-warmpaper" target="_blank" rel="noopener">Warmpaper</a></p>
   </div>
