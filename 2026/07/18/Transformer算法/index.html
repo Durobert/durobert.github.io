@@ -94,7 +94,8 @@
 </header>
 
     <main class="main-content">
-      <article class="post">
+      
+<article class="post post-has-toc">
   <header class="post-header">
     <h1 class="post-title">Transformer算法</h1>
     <div class="post-meta">
@@ -428,14 +429,15 @@
     </div>
 
     
-        <aside class="toc-sidebar">
+      <nav class="toc-sidebar" aria-labelledby="toc-title">
   <div class="toc-wrapper">
-    <h3 class="toc-title">Contents</h3>
+    <span class="toc-indicator" aria-hidden="true"></span>
+    <h3 class="toc-title" id="toc-title">Contents</h3>
     <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Transformer%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">Transformer整体架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E7%A0%81%E5%99%A8-Encoder"><span class="toc-text">编码器(Encoder)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E7%A0%81%E5%99%A8-Decoder"><span class="toc-text">解码器(Decoder)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BE%93%E5%85%A5%E6%96%87%E6%9C%AC%E6%95%B0%E6%8D%AE%E6%95%B0%E5%80%BC%E8%BD%AC%E6%8D%A2"><span class="toc-text">输入文本数据数值转换</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%8D%E7%BD%AE%E7%BC%96%E7%A0%81"><span class="toc-text">位置编码</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%9C%BA%E5%88%B6"><span class="toc-text">自注意力机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E5%A4%B4%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%9C%BA%E5%88%B6"><span class="toc-text">多头注意力机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B1%82%E5%BD%92%E4%B8%80%E5%8C%96"><span class="toc-text">层归一化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E9%A6%88%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C"><span class="toc-text">前馈神经网络</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Transformer%E7%9A%84%E6%8E%A8%E7%90%86%E8%BF%87%E7%A8%8B"><span class="toc-text">Transformer的推理过程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">一、整体架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6%E4%B8%80%E8%A7%88"><span class="toc-text">二、核心组件一览</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%A0%B8%E5%BF%83%E5%85%AC%E5%BC%8F"><span class="toc-text">三、核心公式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="toc-text">四、数据流</span></a></li></ol></li></ol>
   </div>
-</aside>
+</nav>
 
-      
+    
   </div>
 
   
